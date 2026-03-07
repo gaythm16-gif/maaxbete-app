@@ -1,0 +1,13 @@
+# Render Blueprint (optionnel) — déploiement du backend
+# https://render.com/docs/blueprint-spec
+# PORT est fourni automatiquement par Render.
+services:
+  - type: web
+    name: maaxbete-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm run proxy
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # DB_*, FRONTEND_URL, CASINO_* : à ajouter dans le dashboard Render

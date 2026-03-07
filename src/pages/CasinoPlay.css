@@ -1,0 +1,75 @@
+.casino-play-page {
+  padding: 2rem 1rem;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.casino-play-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  color: #d4af37;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.casino-play-header h1 {
+  margin: 0 0 0.25rem 0;
+  color: #e0e0e0;
+  font-size: 1.75rem;
+}
+
+.casino-play-header p {
+  margin: 0;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.casino-play-plinko {
+  padding: 0.5rem 1rem 1rem;
+  max-width: 100%;
+}
+
+.casino-play-plinko .casino-play-header {
+  margin-bottom: 0.75rem;
+}
+
+.plinko-iframe {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 140px);
+  border: none;
+  border-radius: 8px;
+  background: #0b0f14;
+}
+
+.casino-play-plinko .casino-play-header a:not(.back-link) {
+  color: #7aa2f7;
+  text-decoration: none;
+}
+
+.casino-play-plinko .casino-play-header a:not(.back-link):hover {
+  text-decoration: underline;
+}
+
+.casino-play-github-link {
+  margin-top: 0.5rem !important;
+  font-size: 0.85rem !important;
+}
+
+.casino-play-github-link a {
+  color: #7aa2f7;
+  text-decoration: none;
+}
+
+.casino-play-github-link a:hover {
+  text-decoration: underline;
+}

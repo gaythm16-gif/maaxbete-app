@@ -1,0 +1,127 @@
+.home-page { min-height: 60vh; }
+
+.hero {
+  position: relative;
+  min-height: 280px;
+  background: linear-gradient(135deg, #1a1a1e 0%, #2d2d35 100%);
+  display: flex;
+  align-items: center;
+  padding: 2rem 3rem;
+  overflow: hidden;
+}
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 50%, rgba(212, 175, 55, 0.08) 0%, transparent 50%);
+}
+
+.hero-content { position: relative; z-index: 1; }
+
+.hero-title {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #d4af37;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: 0.05em;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: #e0e0e0;
+  margin: 0;
+}
+
+.hero-coins::before {
+  content: '';
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, #d4af37 20%, transparent 70%);
+  border-radius: 50%;
+  top: 20%;
+  right: 15%;
+  opacity: 0.6;
+}
+
+.categories {
+  padding: 2rem 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.categories h2 {
+  color: #e0e0e0;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+}
+
+.category-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.category-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: #25252b;
+  border-radius: 6px;
+  color: #b0b0b0;
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+
+.category-card:hover,
+.category-card.active {
+  color: #fff;
+  border-bottom-color: #e67e22;
+}
+
+.cat-icon { font-size: 1.25rem; }
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.filter-btn {
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  color: #888;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filter-btn.active {
+  background: #e67e22;
+  color: #fff;
+  border-color: #e67e22;
+}
+
+.filter-select {
+  padding: 0.4rem 0.8rem;
+  background: #25252b;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+.filter-search {
+  padding: 0.4rem 0.8rem;
+  background: #25252b;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 4px;
+  margin-left: auto;
+  min-width: 160px;
+}

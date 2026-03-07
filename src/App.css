@@ -1,0 +1,134 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #1a1a1e;
+  color: #e0e0e0;
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Error boundary (affiché si une erreur React se produit) */
+.error-boundary-fallback {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: #1a1a1e;
+  color: #e0e0e0;
+  text-align: center;
+}
+.error-boundary-fallback h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+.error-boundary-message { color: #e74c3c; margin-bottom: 1rem; font-family: monospace; font-size: 0.9rem; }
+.error-boundary-retry {
+  padding: 0.5rem 1rem;
+  background: #e67e22;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.error-boundary-retry:hover { background: #d35400; }
+
+/* Vue smartphone (simulation dans le navigateur) */
+.mobile-preview-frame {
+  max-width: 375px;
+  min-height: 100vh;
+  margin: 0 auto;
+  background: #1a1a1e;
+  box-shadow: 0 0 0 2px #333, 0 20px 60px rgba(0,0,0,0.5);
+  position: relative;
+}
+
+body:has(.mobile-preview-frame) {
+  background: #0d0d0f;
+}
+
+.mobile-preview-toggle {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #27ae60;
+  color: #fff;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.mobile-preview-toggle:hover {
+  background: #2ecc71;
+}
+
+/* En vue smartphone (cadre 375px), même comportement mobile */
+.mobile-preview-frame .topbar-hamburger {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+.mobile-preview-frame .topbar-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #e0e0e0;
+  border-radius: 1px;
+}
+.mobile-preview-frame .sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+.mobile-preview-frame .dashboard-layout.mobile-sidebar-open .sidebar-overlay {
+  display: block;
+}
+.mobile-preview-frame .dashboard-sidebar {
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  width: 260px;
+  max-width: 85vw;
+  height: 100vh;
+  z-index: 1001;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease-out;
+  flex-direction: column;
+  padding: 1rem 0;
+  border-right: 1px solid #333;
+  overflow-y: auto;
+}
+.mobile-preview-frame .dashboard-layout.mobile-sidebar-open .dashboard-sidebar {
+  transform: translateX(0);
+}
+.mobile-preview-frame .sidebar-nav {
+  display: flex !important;
+  flex-direction: column;
+}
+.mobile-preview-frame .sidebar-footer {
+  flex-direction: column;
+}

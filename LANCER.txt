@@ -1,0 +1,53 @@
+========================================
+  DEMARRER LE SITE MAAXBETE
+========================================
+
+Option 1 - Double-clic (recommandé)
+----------------------------------
+Double-cliquez sur:  demarrer-site.bat
+
+Si ça affiche "Connection Failed" ou "EPERM":
+  -> Clic droit sur demarrer-site.bat
+  -> "Executer en tant qu'administrateur"
+
+
+Option 2 - Invite de commandes (Admin)
+--------------------------------------
+1. Menu Démarrer -> taper "cmd"
+2. Clic droit sur "Invite de commandes" -> Executer en tant qu'administrateur
+3. Dans la fenêtre noire, taper:
+
+   cd c:\WORK1\maaxbete-app
+   npm run dev
+
+4. Ouvrir le navigateur sur:  http://localhost:5173
+
+
+Option 3 - Autoriser PowerShell (une seule fois)
+------------------------------------------------
+Si vous préférez utiliser PowerShell, ouvrez-le et tapez:
+
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+Validez avec O puis Entrée. Ensuite "npm run dev" fonctionnera.
+
+
+Option 4 - Exclure le dossier de l'antivirus
+--------------------------------------------
+L'erreur EPERM vient souvent de Windows Defender / antivirus qui bloque Vite.
+
+Windows 10/11:
+  Paramètres -> Mise à jour et sécurité -> Sécurité Windows
+  -> Protection contre les virus et menaces -> Paramètres
+  -> Exclusions -> Ajouter une exclusion -> Dossier
+  -> Choisir:  c:\WORK1
+
+Puis relancer demarrer-site.bat (ou npm run dev).
+
+========================================
+  PAGES DU SITE
+========================================
+Accueil:     http://localhost:5173
+Casino:      http://localhost:5173/casino
+Connexion:   master@maaxbete.com  /  Master2025!
+========================================

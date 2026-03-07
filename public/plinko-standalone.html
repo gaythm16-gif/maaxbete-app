@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plinko</title>
+  <style>
+    :root{ --bg:#0b0f14; --panel:#111820; --ink:#e6f1ff; --muted:#93a4ba; --accent:#5de4c7; --accent2:#7aa2f7; --danger:#ff6b6b; --ok:#26de81; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;background:radial-gradient(1200px 1200px at 10% -10%, #112233 0%, #0b0f14 55%, #080b0f 100%);color:var(--ink)}
+    .wrap-simple{display:grid;grid-template-columns:200px 1fr;gap:20px;max-width:1000px;margin:20px auto;padding:0 16px;align-items:start}
+    @media (max-width: 700px){ .wrap-simple{grid-template-columns:1fr} }
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.06);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.25);padding:16px}
+    .panel-left{display:flex;flex-direction:column;gap:14px}
+    .balance-bar{display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:rgba(13,18,32,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:12px}
+    .balance-bar .label{font-size:12px;color:var(--muted)}
+    .balance-bar .value{font-size:18px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+    .mise-row{display:flex;flex-direction:column;gap:6px}
+    .mise-row .label{font-size:12px;color:var(--muted)}
+    .mise-row input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:#0f141b;color:var(--ink);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+    .mise-row input:focus{outline:none;border-color:var(--accent2)}
+    .btn-drop{cursor:pointer;user-select:none;border:none;width:100%;background:linear-gradient(135deg,var(--accent2),var(--accent));padding:14px 20px;border-radius:12px;color:#041014;font-weight:700;font-size:15px;transition:transform .05s ease}
+    .btn-drop:active{transform:translateY(1px)}
+    .btn-drop:disabled{opacity:0.5;cursor:not-allowed}
+    .msg-solde{font-size:12px;color:var(--danger);min-height:20px;margin-top:4px}
+    .msg-solde:empty{display:none}
+    .game-right{min-width:0}
+    canvas{width:100%;height:100%;display:block}
+    .stage{position:relative;aspect-ratio:3/4;min-height:380px;border-radius:12px;overflow:hidden}
+    .meter{display:grid;grid-template-columns:repeat(auto-fit, minmax(56px, 1fr));gap:6px;padding:12px 0 0}
+    .meter .slot{background:#0d1220;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:8px;text-align:center;font-size:12px;color:var(--muted)}
+    .meter .slot.hit{color:var(--ink)}
+    .meter .slot .good{color:var(--ok)}
+    .meter .slot .bad{color:var(--danger)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+  </style>
+</head>
+<body>
+  <div class="wrap-simple">
+    <section class="card panel-left">
+      <div class="balance-bar" id="balanceBar">
+        <span class="label">Solde</span>
+        <span class="value mono" id="bal">0.00</span>
+      </div>
+      <div class="mise-row">
+        <label class="label" for="mise">Mise (dinar)</label>
+        <input id="mise" type="number" min="1" max="100000" step="1" value="1" placeholder="Montant" inputmode="numeric" />
+      </div>
+      <div class="msg-solde" id="msgSolde" role="alert"></div>
+      <button id="drop" class="btn-drop" type="button">Lancer la bille</button>
+    </section>
+    <section class="card game-right">
+      <div class="stage" id="stage">
+        <canvas id="board"></canvas>
+      </div>
+      <div class="meter" id="meter"></div>
+    </section>
+  </div>
+
+<script>
+// ---------- Config (mise variable: 1, 2, 3... dinars par coup) ----------
+const MIN_MISE = 1;
+const MAX_MISE = 10000;
+const ROWS = 12;
+const RISK = 'medium';
+const RTP = 97;
+const EDGE_BIAS = 1.2;
+const BALL_SPEED = 1.6;
+const SEED = 'plinko-casino';
+
+const isFiniteNum = (v)=> Number.isFinite(v) && !Number.isNaN(v);
+
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^h>>>16)>>>0;}}
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296;}}
+function makeRNG(seedStr, nonce){const seed = xmur3(seedStr+"|"+nonce)();return mulberry32(seed);}
+
+function nCr(n,k){if(k<0||k>n) return 0; k=Math.min(k,n-k); let num=1,den=1; for(let i=1;i<=k;i++){num*=(n-(k-i));den*=i;} return num/den;}
+function binomProb(n,k){return nCr(n,k)/Math.pow(2,n)}
+
+function makeMultipliers(rows, risk, targetRtp, edgeBias){
+  const k = risk==='low'?1.25: risk==='high'?2.1: 1.6;
+  const slots = rows+1; const base = []; const center = rows/2;
+  const bias = Math.max(1, +edgeBias || 1);
+  for(let i=0;i<slots;i++){
+    const d = Math.abs(i-center);
+    const shaped = Math.pow(d, bias);
+    base.push(Math.pow(k, shaped));
+  }
+  let expected=0; for(let i=0;i<slots;i++) expected += binomProb(rows,i)*base[i];
+  const scale = (targetRtp/100)/expected;
+  return base.map(v=> Math.max(0.01, +(v*scale).toFixed(2)));
+}
+
+// ---------- Canvas ----------
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const stage = document.getElementById('stage');
+let dpr = Math.max(2, window.devicePixelRatio||1);
+let W=0,H=0;
+
+function safeResize(){
+  const rect = stage.getBoundingClientRect();
+  let w = rect.width * dpr; let h = rect.height * dpr;
+  if(!isFiniteNum(w) || w <= 0) w = (canvas.clientWidth||600) * dpr;
+  if(!isFiniteNum(h) || h <= 0) h = (canvas.clientHeight||800) * dpr;
+  if(!isFiniteNum(w) || !isFiniteNum(h) || w<=0 || h<=0){ w = 900 * dpr; h = 1200 * dpr; }
+  W = Math.floor(w); H = Math.floor(h);
+  canvas.width=W; canvas.height=H; canvas.style.width=(W/dpr)+'px'; canvas.style.height=(H/dpr)+'px';
+}
+function requestDraw(){ if(W>0 && H>0) draw(); }
+const ro = new ResizeObserver(()=>{ dpr = Math.max(2, window.devicePixelRatio||1); safeResize(); layoutBoard(); renderMeter(); requestDraw(); });
+ro.observe(stage);
+
+// ---------- State (mise lue depuis l'input, solde par postMessage) ----------
+const ui = { drop: document.getElementById('drop'), meter: document.getElementById('meter'), bal: document.getElementById('bal'), mise: document.getElementById('mise'), msgSolde: document.getElementById('msgSolde') };
+
+const MSG_SOLDE_INSUFFISANT = 'Votre solde est insuffisant.';
+
+let state = {
+  rows: ROWS,
+  risk: RISK,
+  rtp: RTP,
+  edgeBias: EDGE_BIAS,
+  seed: SEED,
+  speed: BALL_SPEED,
+  balance: 0,
+  nonce: 0,
+  embedded: typeof window !== 'undefined' && window.self !== window.top,
+  pendingBet: null,
+  multipliers: [],
+  hits: [],
+  pegs: [],
+  slotsX: [],
+  balls: [],
+  floorY: 0,
+  leftWall: 0,
+  rightWall: 0,
+  rowYs: [],
+  rowMinX: [],
+  rowMaxX: [],
+  halfGap: 0,
+  colGap: 0,
+  rowGapEff: 0,
+  house: 0
+};
+
+function radii(){ return { BALL: 8*dpr, PEG: 6*dpr }; }
+
+function rebuild(){
+  state.multipliers = makeMultipliers(state.rows, state.risk, state.rtp, state.edgeBias);
+  state.hits = new Array(state.rows+1).fill(0);
+  layoutBoard();
+  renderMeter();
+  requestDraw();
+}
+
+function layoutBoard(){
+  if(!(W>0 && H>0)) return;
+  const rows = state.rows; const {PEG, BALL} = radii();
+  const marginTop = 40*dpr, marginSide = 40*dpr, marginBottom=120*dpr;
+  const colGap = (PEG*2) + BALL*2*1.25;
+  state.colGap = colGap;
+  state.rowGapEff = colGap;
+  const centerX = W/2;
+  const pegs=[]; const rowYs=[]; const rowMinX=[]; const rowMaxX=[];
+  for(let r=0;r<rows;r++){
+    const cols = r+1; const y = marginTop + (r+1)*colGap; rowYs.push(y);
+    const totalWidth = (cols-1)*colGap; const leftMost = centerX - totalWidth/2; const rightMost = centerX + totalWidth/2;
+    rowMinX.push(leftMost - colGap/2 - BALL); rowMaxX.push(rightMost + colGap/2 + BALL);
+    const row=[];
+    for(let c=0;c<cols;c++){ const x = leftMost + c*colGap; row.push({x,y,r:PEG}); }
+    pegs.push(row);
+  }
+  state.pegs = pegs; state.rowYs=rowYs; state.rowMinX=rowMinX; state.rowMaxX=rowMaxX; state.halfGap = colGap/2;
+  const slots = rows+1; const lastRow = pegs[pegs.length-1] || [{x:centerX}];
+  const slotsX=[]; for(let s=0;s<slots;s++){ const left = (lastRow[0].x ?? centerX) - colGap/2; slotsX.push(left + s*colGap); }
+  state.slotsX = slotsX;
+  const lastY = rowYs[rowYs.length-1] || marginTop;
+  state.floorY = lastY + state.rowGapEff;
+  state.leftWall = rowMinX[0];
+  state.rightWall = rowMaxX[0];
+}
+
+function getEnvelopeAtY(y){
+  const {rowYs,rowMinX,rowMaxX} = state; const n = rowYs.length;
+  if(n===0) return {min: W*0.4, max: W*0.6};
+  if(y <= rowYs[0]) return {min: rowMinX[0], max: rowMaxX[0]};
+  for(let i=0;i<n-1;i++){
+    const y1=rowYs[i], y2=rowYs[i+1]; if(y>=y1 && y<=y2){
+      const t = (y - y1) / Math.max(1, (y2 - y1));
+      const min = rowMinX[i] + t*(rowMinX[i+1]-rowMinX[i]);
+      const max = rowMaxX[i] + t*(rowMaxX[i+1]-rowMaxX[i]);
+      return {min, max};
+    }
+  }
+  const i = n-1; return {min: rowMinX[i], max: rowMaxX[i]};
+}
+
+// ---------- Drawing ----------
+function drawBG(){ if(!(W>0 && H>0)) return; const g=ctx.createLinearGradient(0,0,0,Math.max(1,H)); g.addColorStop(0,'rgba(90,140,255,0.08)'); g.addColorStop(1,'rgba(93,228,199,0.05)'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); }
+function drawPegs(){ const {PEG}=radii(); ctx.save(); ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=10; for(const row of state.pegs){ for(const p of row){ ctx.beginPath(); ctx.arc(p.x,p.y,PEG,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.fill(); } } ctx.restore(); }
+function drawSlots(){ const y = state.floorY; ctx.save(); for(let i=0;i<state.slotsX.length;i++){ const x = state.slotsX[i]; ctx.beginPath(); ctx.moveTo(x, y-40*dpr); ctx.lineTo(x, y+18*dpr); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=2*dpr; ctx.stroke(); const multVal = state.multipliers[i]; const mult = Number.isFinite(multVal) ? multVal : 0; const w = 58*dpr, h=28*dpr; const left = x - w/2, top = y+24*dpr; const rad = h/2; ctx.beginPath(); ctx.moveTo(left+rad,top); ctx.arcTo(left+w,top,left+w,top+h,rad); ctx.arcTo(left+w,top+h,left,top+h,rad); ctx.arcTo(left,top+h,left,top,rad); ctx.arcTo(left,top,left+w,top,rad); ctx.closePath(); const edgeFactor = Math.abs(i - state.rows/2); const c = Math.min(1, edgeFactor/(state.rows/2)); const base = 'rgba('+(120+60*c)+', '+(180-40*c)+', '+(255-40*c)+', 0.18)'; ctx.fillStyle=base; ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.stroke(); ctx.fillStyle='rgba(230,241,255,0.95)'; ctx.font = (12*dpr)+'px ui-monospace, Menlo, monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(mult.toFixed(2)+'x', x, top+h/2); } ctx.restore(); }
+function drawBalls(){
+  const {BALL}=radii();
+  const now = performance.now();
+  const FADE_MS = 800;
+  for(const b of state.balls){
+    let alpha = 1;
+    if(b.finished && b.removeAt && now >= b.removeAt){
+      const t = Math.min(1, (now - b.removeAt)/FADE_MS);
+      alpha = 1 - t;
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const glow = b.finished? 'rgba(93,228,199,0.7)' : 'rgba(122,162,247,0.7)';
+    ctx.shadowColor=glow; ctx.shadowBlur=18*dpr;
+    ctx.beginPath(); ctx.arc(b.x,b.y,BALL,0,Math.PI*2);
+    ctx.fillStyle= b.finished? 'rgba(93,228,199,1)' : 'rgba(122,162,247,1)';
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function draw(){ if(!(W>0 && H>0)) return; ctx.clearRect(0,0,W,H); drawBG(); drawPegs(); drawSlots(); drawBalls(); }
+
+// ---------- Physics ----------
+const physics = { gravity: 2200, restitution: 0.2, friction: 0.995 };
+const FADE_MS = 800;
+
+function spawnBall(){ const {BALL}=radii(); const b = { x: W/2, y: BALL + 10*dpr, vx: 0, vy: 0, rng: makeRNG(state.seed, state.nonce), finished: false, slot: null, removeAt: null }; state.balls.push(b); }
+
+let lastT = 0;
+function stepAll(ts){
+  if(!lastT) lastT = ts; let dt = (ts - lastT)/1000; dt = Math.min(dt, 1/30); lastT = ts;
+  const {BALL}=radii(); const g = physics.gravity * state.speed * (dpr/1);
+
+  for(const b of state.balls){
+    if(b.finished) continue;
+    b.vy += g*dt; b.x += b.vx*dt; b.y += b.vy*dt; b.vx *= physics.friction;
+    const env = getEnvelopeAtY(b.y);
+    let minX = (env.min + BALL), maxX = (env.max - BALL);
+    if(b.x < minX){ b.x = minX; b.vx = Math.abs(b.vx)*0.35; }
+    if(b.x > maxX){ b.x = maxX; b.vx = -Math.abs(b.vx)*0.35; }
+    for(const row of state.pegs){
+      for(const p of row){
+        const dx = b.x - p.x, dy = b.y - p.y; const dist = Math.hypot(dx,dy);
+        const minD = BALL + p.r; if(dist>0 && dist < minD){
+          const nX = dx/dist, nY = dy/dist; const overlap = (minD - dist) + 0.01; b.x += nX * overlap; b.y += nY * overlap;
+          const vn = b.vx*nX + b.vy*nY; const rest = physics.restitution; b.vx -= (1+rest)*vn*nX; b.vy -= (1+rest)*vn*nY;
+          b.vx += (b.rng()-0.5)*30*state.speed;
+        }
+      }
+    }
+    const floor = state.floorY - BALL;
+    if(b.y >= floor){ b.y = floor; b.vx = 0; b.vy = 0; const xs = state.slotsX; let best=0, bestd=Infinity; for(let i=0;i<xs.length;i++){ const d = Math.abs(b.x - xs[i]); if(d<bestd){bestd=d; best=i;} } b.slot = best; b.finished = true; onBallLanded(b); }
+  }
+
+  state.balls = state.balls.filter(bb => !(bb.finished && bb.removeAt && performance.now() >= bb.removeAt + FADE_MS));
+  draw(); requestAnimationFrame(stepAll);
+}
+
+// ---------- Jeu: mise saisie a la main (dinar entier). Solde diminue de ce montant au lancer. ----------
+function getBet(){
+  const raw = Number(ui.mise && ui.mise.value ? ui.mise.value.replace(',','.') : MIN_MISE);
+  const n = Number.isFinite(raw) && raw >= MIN_MISE ? Math.floor(raw) : MIN_MISE;
+  return Math.min(MAX_MISE, n);
+}
+function setButtonsFromBalance(){
+  const bet = getBet();
+  const canPlay = state.balance >= bet;
+  if(ui.drop) ui.drop.disabled = !canPlay;
+  if(ui.msgSolde){
+    ui.msgSolde.textContent = bet > state.balance ? MSG_SOLDE_INSUFFISANT : '';
+  }
+}
+
+function dropBall(){
+  if(!(W>0 && H>0)) return;
+  const bet = getBet();
+  if(bet < MIN_MISE) return;
+  if(state.balance < bet){
+    if(ui.msgSolde) ui.msgSolde.textContent = MSG_SOLDE_INSUFFISANT;
+    return;
+  }
+  if(ui.msgSolde) ui.msgSolde.textContent = '';
+  state.pendingBet = bet;
+  state.balance = state.balance - bet;
+  if(ui.bal) ui.bal.textContent = String(Math.floor(state.balance));
+  setButtonsFromBalance();
+  spawnBall();
+}
+
+function onBallLanded(b){
+  const bet = state.embedded && state.pendingBet != null ? state.pendingBet : getBet();
+  const mult = Number(state.multipliers[b.slot] ?? 0);
+  const win = Math.floor(bet * mult);
+  if(state.embedded && window.self !== window.top){
+    try { window.parent.postMessage({ type: 'plinkoLanded', bet: bet, slot: b.slot, rows: state.rows, risk: state.risk }, '*'); } catch(e){}
+    state.hits[b.slot]++;
+    flashSlot(b.slot);
+    b.removeAt = performance.now() + 3000;
+    return;
+  }
+  state.balance = state.balance + win;
+  if(ui.bal) ui.bal.textContent = String(Math.floor(state.balance));
+  state.hits[b.slot]++;
+  flashSlot(b.slot);
+  b.removeAt = performance.now() + 3000;
+}
+
+function flashSlot(idx){ const el = ui.meter ? ui.meter.querySelector('[data-slot="s'+idx+'"]') : null; if(!el) return; el.classList.add('hit'); setTimeout(function(){ el.classList.remove('hit'); }, 450); }
+
+function renderMeter(){ if(!ui.meter) return; const el = ui.meter; el.innerHTML=''; const slots = state.rows+1; for(let i=0;i<slots;i++){ const p = (binomProb(state.rows,i)*100).toFixed(2); const multVal = state.multipliers[i]; const mult = Number.isFinite(multVal) ? multVal : 0; const div = document.createElement('div'); div.className='slot'; div.dataset.slot = 's'+i; const cls = mult>=1? 'good':'bad'; div.innerHTML = '<div class="mono '+cls+'">'+mult.toFixed(2)+'x</div><div style="font-size:11px;color:var(--muted)">'+p+'%</div>'; el.appendChild(div); } }
+
+// ---------- Liaison avec le site: solde et resultat ----------
+window.addEventListener('message', (event)=>{
+  const d = event.data;
+  if(!d || typeof d !== 'object') return;
+  if(d.type === 'plinkoBalance'){
+    const bal = Number(d.balance);
+    if(Number.isFinite(bal)){ state.balance = bal; if(ui.bal) ui.bal.textContent = String(Math.floor(bal)); setButtonsFromBalance(); }
+  }
+  if(d.type === 'plinkoResult'){
+    const bal = Number(d.balance);
+    if(Number.isFinite(bal)){ state.balance = bal; if(ui.bal) ui.bal.textContent = String(Math.floor(bal)); }
+    state.pendingBet = null;
+    setButtonsFromBalance();
+  }
+});
+
+// ---------- Mise: garder valeur entre min et max quand on quitte le champ ----------
+if(ui.mise){ ui.mise.addEventListener('blur', function(){ const b = getBet(); if(ui.mise.value !== String(b)) ui.mise.value = b; }); ui.mise.addEventListener('input', setButtonsFromBalance); }
+
+// ---------- Init ----------
+ui.drop.addEventListener('click', function(){ state.nonce++; dropBall(); });
+
+window.addEventListener('DOMContentLoaded', function(){ safeResize(); rebuild(); setButtonsFromBalance(); requestAnimationFrame(stepAll); });
+</script>
+</body>
+</html>
