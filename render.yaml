@@ -1,5 +1,6 @@
-# Render Blueprint (optionnel) — déploiement du backend
+# Render Blueprint — déploiement du backend
 # https://render.com/docs/blueprint-spec
+# Connecter le repo GitHub puis New → Blueprint pour créer le service.
 # PORT est fourni automatiquement par Render.
 services:
   - type: web
@@ -10,4 +11,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # DB_*, FRONTEND_URL, CASINO_* : à ajouter dans le dashboard Render
+      - key: FRONTEND_URL
+        value: https://maaxbete-app.vercel.app
+      # À ajouter dans le dashboard Render après création MySQL sur Railway :
+      # DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+      # CASINO_API_URL, CASINO_AGENT_CODE, CASINO_TOKEN, CASINO_SECRET
+      # CASINO_SITE_ENDPOINT = https://maaxbete-app.vercel.app
+      # CASINO_CALLBACK_URL = https://maaxbete-backend.onrender.com/api/casino/callback

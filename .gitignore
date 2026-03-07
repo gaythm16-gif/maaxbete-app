@@ -17,7 +17,9 @@ dist-ssr
 .env.*.local
 wallet.json
 data/
-*.gif
+# Gros fichier GIF (rester en local ou héberger ailleurs)
+public/389105134852633.61dd8a11bbdcf.gif
+389105134852633.61dd8a11bbdcf.gif
 
 # Editor directories and files
 .vscode/*
@@ -29,3 +31,5 @@ data/
 *.njsproj
 *.sln
 *.sw?
+
+.vercel

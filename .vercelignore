@@ -1,0 +1,8 @@
+# Backend (deploye sur Render)
+server/
+# Fichiers lourds / inutiles pour le build frontend
+*.gif
+.env
+.env.*
+.git
+node_modules

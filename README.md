@@ -52,6 +52,19 @@ npm run dev
 
 **Production** : `npm run build` puis déployer le dossier `dist`. Pour la persistance en production, déployer le serveur (proxy + `server/db.js`) et faire pointer le frontend vers son URL.
 
+## Déploiement (GitHub, Vercel, Render, Railway)
+
+| Service | Rôle | Lien |
+|--------|------|------|
+| **GitHub** | Code source | [gaythm16-gif/maaxbete-app](https://github.com/gaythm16-gif/maaxbete-app) |
+| **Vercel** | Frontend (déjà déployé, lié à GitHub) | [maaxbete-app.vercel.app](https://maaxbete-app.vercel.app) |
+| **Render** | Backend (API + proxy) | [Deploy avec Blueprint](https://dashboard.render.com/select-repo?type=blueprint&repo=https://github.com/gaythm16-gif/maaxbete-app) |
+| **Railway** | MySQL | [New Project → Add MySQL](https://railway.app/new) puis recopier les variables dans Render |
+
+- **Vercel** : lié au repo ; chaque push sur `main` redéploie le frontend. Variable `VITE_API_URL` = URL du backend Render (ex. `https://maaxbete-backend.onrender.com`).
+- **Render** : après déploiement du Blueprint, ajouter dans Environment les variables DB (Railway), CASINO_* et `CASINO_SITE_ENDPOINT` / `CASINO_CALLBACK_URL`. Voir `DEPLOY.md` et `render.yaml`.
+- **Railway** : créer une base MySQL, exécuter `server/database/schema.sql`, puis copier Host/User/Password/Database dans Render.
+
 ## Casino API (Nexus) et proxy
 
 Le proxy tourne sur le port **3001** (`npm run proxy`). Il appelle l’API Nexus et gère le solde joueur. Pour que les jeux affichent le solde en TND, le fournisseur peut avoir besoin d’appeler ton serveur (callback). **Sans lien public**, ce callback n’est pas joignable depuis Internet.
