@@ -420,13 +420,14 @@ async function start() {
     const result = await testConnection();
     if (!result.ok) {
       console.error('[DB]', result.message);
-      process.exit(1);
+      console.error('[DB] Le serveur démarre quand même. Corrigez DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD sur Render (Environment) pour activer MySQL.');
+    } else {
+      console.log('[DB]', result.message);
+      console.log('[DB] Stockage : MySQL — toutes les données sont enregistrées à l\'instant dans la base.');
+      await db.ensureMaster();
     }
-    console.log('[DB]', result.message);
-    console.log('[DB] Stockage : MySQL — toutes les données sont enregistrées à l\'instant dans la base.');
-    await db.ensureMaster();
   } else {
-    console.log('[DB] Stockage : fichiers JSON (data/) — configurez DB_HOST, DB_NAME, DB_USER dans .env pour utiliser MySQL.');
+    console.log('[DB] Stockage : fichiers JSON (data/) — configurez DB_HOST, DB_NAME, DB_USER pour utiliser MySQL.');
   }
   app.listen(PORT, () => {
     if (!isProduction) console.log(`Casino proxy: http://localhost:${PORT}`);
