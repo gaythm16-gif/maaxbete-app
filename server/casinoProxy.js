@@ -424,7 +424,12 @@ async function start() {
     } else {
       console.log('[DB]', result.message);
       console.log('[DB] Stockage : MySQL — toutes les données sont enregistrées à l\'instant dans la base.');
-      await db.ensureMaster();
+      try {
+        await db.ensureMaster();
+      } catch (err) {
+        console.error('[DB] ensureMaster:', err.message || err);
+        console.error('[DB] Le serveur démarre quand même. Exécutez schema.sql sur Railway si besoin.');
+      }
     }
   } else {
     console.log('[DB] Stockage : fichiers JSON (data/) — configurez DB_HOST, DB_NAME, DB_USER pour utiliser MySQL.');
