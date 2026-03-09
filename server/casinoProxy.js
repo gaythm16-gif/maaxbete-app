@@ -265,6 +265,28 @@ app.get('/api/casino/games', async (req, res) => {
     return apiError(res, 500, 'CASINO_TOKEN ou CASINO_SECRET manquants dans .env');
   }
   const provider = req.query.provider || '';
+  const methodsToTry = ['game_list', 'get_games', 'games_list', 'list_games', 'get_game_list'];
+  for (const method of methodsToTry) {
+    try {
+      const body = { method };
+      if (provider) body.provider_code = provider;
+      const { res: r, data } = await callApi(body);
+      if (!r.ok) continue;
+      const rawGames = data.games || data.data || data.list || (data.result && data.result.games) || (data.result && data.result.list) || [];
+      if (Array.isArray(rawGames) && rawGames.length > 0) {
+        const games = rawGames.map((g) => normalizeGame(g, provider)).filter(Boolean);
+        if (games.length > 0) {
+          return res.json({ ok: true, games, isDemo: false });
+        }
+      }
+      if (data.status === 1 && Array.isArray(rawGames)) {
+        const games = rawGames.map((g) => normalizeGame(g, provider)).filter(Boolean);
+        return res.json({ ok: true, games: games.length ? games : [], isDemo: games.length === 0 });
+      }
+    } catch (_) {
+      continue;
+    }
+  }
   try {
     const body = { method: 'game_list' };
     if (provider) body.provider_code = provider;
@@ -272,12 +294,9 @@ app.get('/api/casino/games', async (req, res) => {
     if (!r.ok) {
       return apiError(res, r.status || 502, data.msg || data.error || 'Erreur API', r.status === 403 || r.status === 401 ? 'IP non autorisée ou mauvais identifiants.' : null);
     }
-    if (data.status !== 1 && data.status !== undefined) {
-      return res.json({ ok: true, games: [], isDemo: true, error: data.msg || data.error });
-    }
     const rawGames = data.games || data.data || data.list || [];
-    const games = rawGames.map((g) => normalizeGame(g, provider));
-    return res.json({ ok: true, games, isDemo: false });
+    const games = rawGames.map((g) => normalizeGame(g, provider)).filter(Boolean);
+    return res.json({ ok: true, games, isDemo: games.length === 0, error: games.length === 0 ? (data.msg || data.error) : null });
   } catch (err) {
     return apiError(res, 502, err.message || 'Erreur réseau');
   }

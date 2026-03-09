@@ -1,18 +1,19 @@
 /**
  * Client API Casino : appelle /api/casino (proxy en dev, backend Render en prod).
- * URL de base : src/config/api.js (une seule source pour éviter toute variable non définie).
+ * URL : getCasinoApiBase() uniquement — appel à l’exécution pour éviter tout nom de variable non défini.
  */
 import { getCasinoApiBase } from '../config/api.js';
 import { DEMO_CASINO_GAMES } from '../data/casinoGames';
 import { getDemoGameImage } from '../utils/demoGameImage';
 
-const getCasinoBase = () => getCasinoApiBase();
+function getBase() {
+  return getCasinoApiBase();
+}
 
 /** IP publiques du serveur (proxy) — à ajouter dans la whitelist. Retourne { ip, ipv6 }. */
 export async function getMyIp() {
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/my-ip`);
+    const res = await fetch(`${getBase()}/my-ip`);
     const raw = await res.json().catch(() => ({}));
     if (!raw.ok) return { ip: null, ipv6: null };
     return { ip: raw.ip || null, ipv6: raw.ipv6 || null };
@@ -23,8 +24,7 @@ export async function getMyIp() {
 
 export async function getProviders() {
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/providers`);
+    const res = await fetch(`${getBase()}/providers`);
     const raw = await res.json().catch(() => ({}));
     if (res.ok && raw.ok && Array.isArray(raw.providers) && raw.providers.length > 0) {
       return { ok: true, providers: raw.providers };
@@ -45,8 +45,7 @@ export async function getProviders() {
 export async function getGameList(providerCode) {
   const q = providerCode ? `?provider=${encodeURIComponent(providerCode)}` : '';
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/games${q}`);
+    const res = await fetch(`${getBase()}/games${q}`);
     const raw = await res.json().catch(() => ({}));
     if (res.ok && raw.ok && Array.isArray(raw.games) && raw.games.length > 0) {
       return { ok: true, games: raw.games, isDemo: !!raw.isDemo };
@@ -93,8 +92,7 @@ export async function getGameList(providerCode) {
 
 export async function launchGame({ providerCode, gameCode, userCode, lang = 'en', balance, currency }) {
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/launch`, {
+    const res = await fetch(`${getBase()}/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -126,8 +124,7 @@ export async function launchGame({ providerCode, gameCode, userCode, lang = 'en'
 export async function getCasinoBalance(userLogin) {
   if (!userLogin) return { ok: false, balance: null };
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/balance?user=${encodeURIComponent(userLogin)}`);
+    const res = await fetch(`${getBase()}/balance?user=${encodeURIComponent(userLogin)}`);
     const raw = await res.json().catch(() => ({}));
     if (raw.ok) return { ok: true, balance: raw.balance, currency: raw.currency };
     return { ok: false, balance: null };
@@ -140,8 +137,7 @@ export async function getCasinoBalance(userLogin) {
 export async function syncCasinoBalance(userLogin, balance, currency = 'TND') {
   if (!userLogin) return { ok: false };
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/balance`, {
+    const res = await fetch(`${getBase()}/balance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user: userLogin, balance: Number(balance) || 0, currency }),
@@ -157,8 +153,7 @@ export async function syncCasinoBalance(userLogin, balance, currency = 'TND') {
 export async function depositToNexus(userLogin, amount, currency = 'TND') {
   if (!userLogin || !amount) return { ok: false };
   try {
-    const base = getCasinoBase();
-    const res = await fetch(`${base}/nexus-deposit`, {
+    const res = await fetch(`${getBase()}/nexus-deposit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user: userLogin, amount: Number(amount) || 0, currency }),
