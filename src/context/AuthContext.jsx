@@ -113,7 +113,9 @@ export function AuthProvider({ children }) {
               setUsers(arr[0] || []);
               setTransactions(arr[1] || []);
             })
-            .catch(() => {});
+            .catch(() => {
+              if (!cancelled) setUser(null);
+            });
         }
       } else {
         const raw = localStorage.getItem(STORAGE_KEY);

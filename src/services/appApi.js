@@ -33,6 +33,10 @@ async function request(method, path, body = null, useAuth = true) {
   if (body && (method === 'POST' || method === 'PATCH')) opts.body = JSON.stringify(body);
   const res = await fetch(`${base}${path}`, opts);
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    setToken(null);
+    throw new Error(data.error || 'Session expirée');
+  }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
