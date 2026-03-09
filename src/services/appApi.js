@@ -1,13 +1,10 @@
 /**
  * Client API pour les données app (utilisateurs, auth, transactions).
- * En dev : /api/app (proxy Vite vers le backend local).
- * En prod (Vercel) : VITE_API_URL doit pointer vers le backend (Render).
+ * En dev : /api/app (proxy Vite). En prod : backend Render (voir src/config/api.js).
  */
-const getApiBase = () => {
-  const url = import.meta.env.VITE_API_URL;
-  if (url) return `${url.replace(/\/$/, '')}/api/app`;
-  return '/api/app';
-};
+import { getAppApiBase } from '../config/api.js';
+
+const getApiBase = () => getAppApiBase();
 
 function getToken() {
   try {

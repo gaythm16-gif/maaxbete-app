@@ -1,15 +1,12 @@
 /**
- * Client API Casino : appelle le proxy /api/casino (backend).
- * En dev : /api/casino (proxy Vite). En prod : VITE_API_URL + /api/casino (backend Render).
+ * Client API Casino : appelle /api/casino (proxy en dev, backend Render en prod).
+ * URL de base : src/config/api.js (une seule source pour éviter toute variable non définie).
  */
+import { getCasinoApiBase } from '../config/api.js';
 import { DEMO_CASINO_GAMES } from '../data/casinoGames';
 import { getDemoGameImage } from '../utils/demoGameImage';
 
-const getCasinoBase = () => {
-  const url = import.meta.env.VITE_API_URL;
-  if (url) return `${url.replace(/\/$/, '')}/api/casino`;
-  return '/api/casino';
-};
+const getCasinoBase = () => getCasinoApiBase();
 
 /** IP publiques du serveur (proxy) — à ajouter dans la whitelist. Retourne { ip, ipv6 }. */
 export async function getMyIp() {
