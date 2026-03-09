@@ -26,6 +26,7 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.CASINO_SITE_ENDPOI
 const SITE_ENDPOINT = FRONTEND_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5178/').replace(/\/$/, '');
 const GAME_LIST_PATH = process.env.CASINO_GAME_LIST_PATH || '/game/list';
 const CALLBACK_URL = (process.env.CASINO_CALLBACK_URL || '').replace(/\/$/, '');
+const BALANCE_IN_CENTS = process.env.CASINO_BALANCE_IN_CENTS === 'true' || process.env.CASINO_BALANCE_IN_CENTS === '1';
 const isProduction = process.env.NODE_ENV === 'production';
 
 // CORS : en production n'accepter que le frontend (Vercel) ; en dev autoriser l'origine ou *
@@ -207,20 +208,67 @@ app.post('/api/casino/nexus-deposit', async (req, res) => {
       continue;
     }
   }
+  if (isProduction) console.warn('[Casino] nexus-deposit: Deposit non disponible pour', login, '- le jeu peut s\'ouvrir avec solde 0 si le provider utilise un wallet callback. Définissez CASINO_CALLBACK_URL.');
   return res.status(502).json({ ok: false, error: 'Deposit non disponible (vérifier Transfer API)' });
 });
 
-/** Callback appelé par l'API casino pour mises/gains (débit/crédit du solde). */
+/** Retourne le solde actuel du joueur (sans modifier). Utilisé par le callback get_balance. */
+async function getCurrentBalance(userLogin) {
+  if (useDbWallet) {
+    try {
+      const u = await db.getUserByLogin(userLogin);
+      if (!u) return null;
+      return Math.round(Number(u.balance) * 100) / 100;
+    } catch (_) {
+      return null;
+    }
+  }
+  const w = getWallet(userLogin);
+  return w ? Math.round(Number(w.balance) * 100) / 100 : null;
+}
+
+function formatBalanceForProvider(balance, currency = 'TND') {
+  const b = Math.round(Number(balance) * 100) / 100;
+  if (BALANCE_IN_CENTS) return Math.round(b * 100);
+  return b;
+}
+
+/** Réponse balance pour GET callback (partagée). */
+async function handleGetCallbackBalance(req, res) {
+  const userLogin = (req.query.user_code || req.query.user_id || req.query.user || req.query.player_id || req.query.username || '').toString().trim();
+  if (!userLogin) return res.status(400).json({ status: 0, error: 'user manquant', balance: 0 });
+  const balance = await getCurrentBalance(userLogin);
+  if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
+  const out = formatBalanceForProvider(balance);
+  return res.json({ status: 1, balance: out, currency: 'TND', error: 0 });
+}
+
+/** GET balance : certains providers appellent le callback en GET pour récupérer le solde. */
+app.get('/api/casino/callback', handleGetCallbackBalance);
+/** Certains providers utilisent Site Endpoint + /balance */
+app.get('/api/casino/callback/balance', handleGetCallbackBalance);
+
+/** Callback appelé par l'API casino pour mises/gains (débit/crédit du solde) et get_balance. */
 app.post('/api/casino/callback', async (req, res) => {
   const body = req.body || {};
-  const userLogin = (body.user_code || body.user_id || body.user || body.player_id || '').toString().trim();
+  const userLogin = (body.user_code || body.user_id || body.user || body.player_id || body.username || '').toString().trim();
   if (!userLogin) return res.status(400).json({ status: 0, error: 'user manquant' });
-  const amount = Number(body.amount ?? body.bet ?? body.win ?? body.delta ?? 0);
   const type = (body.type || body.action || '').toString().toLowerCase();
+
+  // get_balance / balance : lecture seule, ne pas modifier le solde
+  if (type === 'get_balance' || type === 'balance' || type === 'balance_check') {
+    const balance = await getCurrentBalance(userLogin);
+    if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
+    return res.json({ status: 1, balance: formatBalanceForProvider(balance), currency: 'TND', error: 0 });
+  }
+
+  const amount = Number(body.amount ?? body.bet ?? body.win ?? body.delta ?? 0);
   let delta = 0;
   if (type === 'bet' || type === 'debit') delta = -Math.abs(amount);
   else if (type === 'win' || type === 'credit') delta = Math.abs(amount);
+  else if (type === 'refund' || type === 'rollback') delta = Math.abs(amount);
   else delta = Number(body.delta) || 0;
+
   if (useDbWallet) {
     try {
       const u = await db.getUserByLogin(userLogin);
@@ -228,13 +276,27 @@ app.post('/api/casino/callback', async (req, res) => {
       const current = Math.round(Number(u.balance) * 100) / 100;
       const newBalance = Math.max(0, Math.round((current + delta) * 100) / 100);
       await db.updateUser(u.id, { balance: newBalance });
-      return res.json({ status: 1, balance: newBalance });
+      if (delta !== 0) {
+        const txType = delta > 0 ? 'WIN' : 'BET';
+        try {
+          await db.addTransaction({
+            id: `casino-${Date.now()}-${(body.transaction_id || body.call_id || '').toString().slice(0, 20)}`,
+            type: txType,
+            fromId: u.id,
+            toId: u.id,
+            amount: delta,
+            note: `Casino callback ${type} ${Math.abs(amount)}`,
+          });
+        } catch (_) {}
+      }
+      return res.json({ status: 1, balance: formatBalanceForProvider(newBalance), currency: (u && u.currency) || 'TND' });
     } catch (e) {
       return res.status(500).json({ status: 0, error: e.message });
     }
   }
   const newBalance = updateBalance(userLogin, delta);
-  return res.json({ status: 1, balance: newBalance });
+  const w = getWallet(userLogin);
+  return res.json({ status: 1, balance: formatBalanceForProvider(newBalance), currency: (w && w.currency) || 'TND' });
 });
 
 app.get('/api/casino/providers', async (_req, res) => {
@@ -482,6 +544,9 @@ async function start() {
     if (!isProduction) console.log(`Casino proxy: http://localhost:${PORT}`);
     else console.log(`Backend démarré sur le port ${PORT}`);
     if (!isProduction) console.log(`API cible: ${API_BASE}`);
+    if (!CALLBACK_URL) {
+      console.warn('[Casino] CASINO_CALLBACK_URL non défini : le provider ne peut pas appeler votre backend pour solde/mises/gains. Définissez-le sur Render (ex: https://maaxbete-backend.onrender.com/api/casino/callback) et dans le panneau API Nexus.');
+    }
   });
 }
 
