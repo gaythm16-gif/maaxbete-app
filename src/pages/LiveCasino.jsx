@@ -176,8 +176,8 @@ export default function LiveCasino() {
     } catch (e) {
       setGameLaunchUrl(null);
       const msg = e.message || 'Erreur lors du lancement.';
-      if (msg.includes('API_BASE') && msg.includes('not defined')) {
-        setError('Veuillez actualiser la page (Ctrl+F5) pour charger la dernière version.');
+      if (msg.includes('is not defined') || msg.includes('API_BASE')) {
+        setError('Veuillez actualiser la page (Ctrl+Shift+R ou Cmd+Shift+R) pour charger la dernière version.');
       } else {
         setError(msg);
       }
@@ -312,8 +312,15 @@ export default function LiveCasino() {
 
       {error && !loading && (
         <div className="casino-error">
-          {String(error).includes('API_BASE') && String(error).includes('not defined')
-            ? 'Veuillez actualiser la page (Ctrl+F5 ou Cmd+Shift+R) pour charger la dernière version.'
+          {String(error).includes('is not defined') || String(error).includes('API_BASE')
+            ? (
+              <>
+                Actualisez la page (Ctrl+Shift+R). Ou{' '}
+                <button type="button" className="casino-balance-refresh" onClick={() => { window.location.href = window.location.pathname + '?v=' + Date.now(); }}>
+                  cliquer ici pour actualiser
+                </button>.
+              </>
+            )
             : error}
           {whitelistIp && (whitelistIp.ip || whitelistIp.ipv6) && (
             <>
