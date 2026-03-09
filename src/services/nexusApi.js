@@ -96,7 +96,8 @@ export async function getGameList(providerCode) {
 
 export async function launchGame({ providerCode, gameCode, userCode, lang = 'en', balance, currency }) {
   try {
-    const res = await fetch(`${API_BASE}/launch`, {
+    const base = getCasinoBase();
+    const res = await fetch(`${base}/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
