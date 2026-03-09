@@ -430,13 +430,12 @@ app.post('/api/casino/launch', async (req, res) => {
     }
   }
 
-  const errMsg = lastApiError
-    ? `API Casino : ${lastApiError}`
-    : 'Aucune méthode de lancement acceptée par l\'API. Vérifiez la doc API (méthode de lancement) et la whitelist IP.';
-  return res.status(502).json({
-    ok: false,
-    error: errMsg,
-    hint: lastApiError ? undefined : 'Vérifiez que l\'IP du backend (voir /api/casino/my-ip) est dans la whitelist du panneau API.',
+  const fallbackBase = FRONTEND_URL || 'https://maaxbete-app.vercel.app';
+  const fallbackUrl = `${fallbackBase}/casino-demo-unavailable?game=${encodeURIComponent(game_code)}`;
+  return res.json({
+    ok: true,
+    launch_url: fallbackUrl,
+    is_fallback: true,
   });
 });
 

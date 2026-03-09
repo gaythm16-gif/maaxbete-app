@@ -8,6 +8,7 @@ import DashboardLayout from './components/DashboardLayout';
 import Home from './pages/Home';
 import Casino from './pages/Casino';
 import LiveCasino from './pages/LiveCasino';
+import CasinoDemoUnavailable from './pages/CasinoDemoUnavailable';
 import ParisSportifs from './pages/ParisSportifs';
 import DashboardHome from './pages/dashboard/DashboardHome';
 import Tree from './pages/dashboard/Tree';
@@ -56,6 +57,7 @@ export default function App() {
                     <Route path="paris-sportifs" element={<ParisSportifs />} />
                     <Route path="paris-direct" element={<PlaceholderPage title="Paris en direct" />} />
                     <Route path="casino" element={<Casino />} />
+                    <Route path="casino-demo-unavailable" element={<CasinoDemoUnavailable />} />
                     <Route path="live-casino" element={<LiveCasino />} />
                     <Route path="virtuels" element={<PlaceholderPage title="Virtuels" />} />
                   </Route>

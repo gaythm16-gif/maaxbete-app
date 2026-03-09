@@ -1,0 +1,53 @@
+.casino-demo-unavailable {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: #e0e0e0;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.casino-demo-unavailable-card {
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.casino-demo-unavailable h1 {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+  color: #ffc107;
+}
+
+.casino-demo-game-name {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-bottom: 1rem;
+}
+
+.casino-demo-unavailable ul {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.casino-demo-unavailable li {
+  margin-bottom: 0.5rem;
+}
+
+.casino-demo-unavailable code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.casino-demo-note {
+  font-size: 0.9rem;
+  color: #888;
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
