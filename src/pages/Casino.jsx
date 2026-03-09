@@ -398,7 +398,9 @@ export default function Casino() {
 
       {error && !loading && (
         <div className="casino-error">
-          {error}
+          {String(error).includes('API_BASE') && String(error).includes('not defined')
+            ? 'Veuillez actualiser la page (Ctrl+F5 ou Cmd+Shift+R) pour charger la dernière version.'
+            : error}
           {whitelistIp && (whitelistIp.ip || whitelistIp.ipv6) && (
             <>
               {whitelistIp.ipv6 && (
