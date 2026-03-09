@@ -4,6 +4,11 @@
  * Test de connexion au démarrage de l'application.
  */
 import mysql from 'mysql2/promise';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DB_HOST = process.env.DB_HOST || '';
 const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10);
@@ -63,6 +68,40 @@ export async function testConnection() {
         ? 'Erreur de connexion à la base de données.'
         : `Erreur MySQL: ${err.message || 'connexion refusée'}`,
     };
+  }
+}
+
+/**
+ * Si la table users n'existe pas, exécute server/database/schema.sql.
+ * Permet au backend (Render) de créer les tables à la première connexion à Railway.
+ */
+export async function runSchemaIfNeeded() {
+  if (!isConfigured) return;
+  const p = getPool();
+  try {
+    const [rows] = await p.query(
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = 'users'",
+      [DB_NAME]
+    );
+    if (rows.length > 0) return;
+    const schemaPath = join(__dirname, '..', 'database', 'schema.sql');
+    const sql = readFileSync(schemaPath, 'utf8');
+    const statements = sql
+      .split(';')
+      .map((s) => s.replace(/--[^\n]*/g, '').trim())
+      .filter((s) => s.length > 0);
+    const conn = await p.getConnection();
+    try {
+      for (const stmt of statements) {
+        if (stmt) await conn.query(stmt + ';');
+      }
+      console.log('[DB] Schéma SQL appliqué (tables créées).');
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('[DB] runSchemaIfNeeded:', err.message || err);
+    throw err;
   }
 }
 

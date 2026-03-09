@@ -8,7 +8,7 @@ import { dirname, join } from 'path';
 import express from 'express';
 import { getWallet, setWallet, updateBalance } from './walletStore.js';
 import * as db from './db.js';
-import { testConnection, isConfigured } from './config/database.js';
+import { testConnection, isConfigured, runSchemaIfNeeded } from './config/database.js';
 import appRoutes from './appRoutes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -425,6 +425,7 @@ async function start() {
       console.log('[DB]', result.message);
       console.log('[DB] Stockage : MySQL — toutes les données sont enregistrées à l\'instant dans la base.');
       try {
+        await runSchemaIfNeeded();
         await db.ensureMaster();
       } catch (err) {
         console.error('[DB] ensureMaster:', err.message || err);
