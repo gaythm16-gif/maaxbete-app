@@ -1,8 +1,7 @@
 /**
- * URL de base du backend (Render).
- * - En dev : vide → requêtes vers /api (proxy Vite vers localhost:3001).
- * - En prod (Vercel) : VITE_API_URL au build, ou fallback si déployé sur notre domaine.
- * Une seule source de vérité pour éviter toute variable non définie (ex. API_BASE).
+ * URL de base du backend (Render) — SEULE source pour le frontend.
+ * Stack : React + Vite → utiliser import.meta.env.VITE_* (pas process.env).
+ * Ne jamais utiliser de variable nommée API_BASE dans le frontend (elle n’existe que côté backend).
  */
 function getBackendBaseUrl() {
   const fromEnv = import.meta.env.VITE_API_URL;
