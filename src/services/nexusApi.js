@@ -14,12 +14,15 @@ function getCasinoUrl() {
   return '/api/casino';
 }
 
-const CASINO_URL = getCasinoUrl();
+/** Toujours appeler à la requête pour avoir la bonne origine (évite problème au premier chargement). */
+function casinoUrl() {
+  return getCasinoUrl();
+}
 
 /** IP publiques du serveur (proxy) — à ajouter dans la whitelist. Retourne { ip, ipv6 }. */
 export async function getMyIp() {
   try {
-    const res = await fetch(`${CASINO_URL}/my-ip`);
+    const res = await fetch(`${casinoUrl()}/my-ip`);
     const raw = await res.json().catch(() => ({}));
     if (!raw.ok) return { ip: null, ipv6: null };
     return { ip: raw.ip || null, ipv6: raw.ipv6 || null };
@@ -30,7 +33,7 @@ export async function getMyIp() {
 
 export async function getProviders() {
   try {
-    const res = await fetch(`${CASINO_URL}/providers`);
+    const res = await fetch(`${casinoUrl()}/providers`);
     const raw = await res.json().catch(() => ({}));
     if (res.ok && raw.ok && Array.isArray(raw.providers) && raw.providers.length > 0) {
       return { ok: true, providers: raw.providers };
@@ -51,7 +54,7 @@ export async function getProviders() {
 export async function getGameList(providerCode) {
   const q = providerCode ? `?provider=${encodeURIComponent(providerCode)}` : '';
   try {
-    const res = await fetch(`${CASINO_URL}/games${q}`);
+    const res = await fetch(`${casinoUrl()}/games${q}`);
     const raw = await res.json().catch(() => ({}));
     if (res.ok && raw.ok && Array.isArray(raw.games) && raw.games.length > 0) {
       return { ok: true, games: raw.games, isDemo: !!raw.isDemo };
@@ -98,7 +101,7 @@ export async function getGameList(providerCode) {
 
 export async function launchGame({ providerCode, gameCode, userCode, lang = 'en', balance, currency }) {
   try {
-    const res = await fetch(`${CASINO_URL}/launch`, {
+    const res = await fetch(`${casinoUrl()}/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -111,8 +114,9 @@ export async function launchGame({ providerCode, gameCode, userCode, lang = 'en'
       }),
     });
     const raw = await res.json().catch(() => ({}));
-    if (res.ok && raw.ok && raw.launch_url) {
-      return { ok: true, url: raw.launch_url };
+    const url = raw.launch_url || raw.url || raw.game_url;
+    if (res.ok && url && typeof url === 'string' && url.startsWith('http')) {
+      return { ok: true, url };
     }
     return {
       ok: false,
@@ -130,7 +134,7 @@ export async function launchGame({ providerCode, gameCode, userCode, lang = 'en'
 export async function getCasinoBalance(userLogin) {
   if (!userLogin) return { ok: false, balance: null };
   try {
-    const res = await fetch(`${CASINO_URL}/balance?user=${encodeURIComponent(userLogin)}`);
+    const res = await fetch(`${casinoUrl()}/balance?user=${encodeURIComponent(userLogin)}`);
     const raw = await res.json().catch(() => ({}));
     if (raw.ok) return { ok: true, balance: raw.balance, currency: raw.currency };
     return { ok: false, balance: null };
@@ -143,7 +147,7 @@ export async function getCasinoBalance(userLogin) {
 export async function syncCasinoBalance(userLogin, balance, currency = 'TND') {
   if (!userLogin) return { ok: false };
   try {
-    const res = await fetch(`${CASINO_URL}/balance`, {
+    const res = await fetch(`${casinoUrl()}/balance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user: userLogin, balance: Number(balance) || 0, currency }),
@@ -159,7 +163,7 @@ export async function syncCasinoBalance(userLogin, balance, currency = 'TND') {
 export async function depositToNexus(userLogin, amount, currency = 'TND') {
   if (!userLogin || !amount) return { ok: false };
   try {
-    const res = await fetch(`${CASINO_URL}/nexus-deposit`, {
+    const res = await fetch(`${casinoUrl()}/nexus-deposit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user: userLogin, amount: Number(amount) || 0, currency }),
