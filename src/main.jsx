@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+// Nettoyer l’URL après rechargement forcé (?v=...) pour éviter cache
+if (typeof window !== 'undefined' && window.location?.search && /[?&](?:v|_cb|nocache)=/.test(window.location.search)) {
+  try {
+    window.history.replaceState({}, '', window.location.pathname + (window.location.hash || ''))
+  } catch (_) {}
+}
+
 const rootEl = document.getElementById('root')
 if (!rootEl) {
   document.body.innerHTML = '<p style="padding:2rem;color:red;">Erreur: élément #root introuvable.</p>'

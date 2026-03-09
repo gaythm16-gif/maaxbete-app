@@ -153,19 +153,26 @@ export default function LiveCasino() {
     if (!providerCode || !gameCode) return;
     setError(null);
     setGameLaunchUrl('');
+    const LAUNCH_TIMEOUT_MS = 20000;
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Délai dépassé. Actualisez la page (Ctrl+Shift+R) puis réessayez.')), LAUNCH_TIMEOUT_MS);
+    });
     try {
       await Promise.all([
         syncBalanceToServer(user.login, user.balance, user.currency || 'TND'),
         depositToNexus(user.login, user.balance, user.currency || 'TND'),
       ]);
-      const result = await launchGame({
-        providerCode,
-        gameCode,
-        userCode: user.login,
-        lang: 'en',
-        balance: user.balance,
-        currency: user.currency || 'TND',
-      });
+      const result = await Promise.race([
+        launchGame({
+          providerCode,
+          gameCode,
+          userCode: user.login,
+          lang: 'en',
+          balance: user.balance,
+          currency: user.currency || 'TND',
+        }),
+        timeoutPromise,
+      ]);
       if (result.ok && result.url) {
         setGameLaunchUrl(result.url);
       } else {
@@ -175,9 +182,9 @@ export default function LiveCasino() {
       }
     } catch (e) {
       setGameLaunchUrl(null);
-      const msg = e.message || 'Erreur lors du lancement.';
+      const msg = e?.message || 'Erreur lors du lancement.';
       if (msg.includes('is not defined') || msg.includes('API_BASE')) {
-        setError('Veuillez actualiser la page (Ctrl+Shift+R ou Cmd+Shift+R) pour charger la dernière version.');
+        setError('Ancienne version chargée. Actualisez la page avec Ctrl+Shift+R (ou Cmd+Shift+R sur Mac), puis réessayez.');
       } else {
         setError(msg);
       }

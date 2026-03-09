@@ -190,19 +190,26 @@ export default function Casino() {
     setError(null);
     setGameLaunchUrl(''); // Affiche l'overlay tout de suite avec "Chargement..."
     setLaunching(true);
+    const LAUNCH_TIMEOUT_MS = 20000; // 20 s max pour éviter blocage infini
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Délai dépassé. Actualisez la page (Ctrl+Shift+R) puis réessayez.')), LAUNCH_TIMEOUT_MS);
+    });
     try {
       await Promise.all([
         syncBalanceToServer(user.login, user.balance, user.currency || 'TND'),
         depositToNexus(user.login, user.balance, user.currency || 'TND'),
       ]);
-      const result = await launchGame({
-        providerCode,
-        gameCode,
-        userCode: user.login,
-        lang: 'en',
-        balance: user.balance,
-        currency: user.currency || 'TND',
-      });
+      const result = await Promise.race([
+        launchGame({
+          providerCode,
+          gameCode,
+          userCode: user.login,
+          lang: 'en',
+          balance: user.balance,
+          currency: user.currency || 'TND',
+        }),
+        timeoutPromise,
+      ]);
       if (result.ok && result.url) {
         setGameLaunchUrl(result.url);
       } else {
@@ -212,9 +219,9 @@ export default function Casino() {
       }
     } catch (e) {
       setGameLaunchUrl(null);
-      const msg = e.message || 'Erreur lors du lancement du jeu.';
+      const msg = e?.message || 'Erreur lors du lancement du jeu.';
       if (msg.includes('is not defined') || msg.includes('API_BASE')) {
-        setError('Veuillez actualiser la page (Ctrl+Shift+R ou Cmd+Shift+R) pour charger la dernière version, puis réessayez.');
+        setError('Ancienne version chargée. Actualisez la page avec Ctrl+Shift+R (ou Cmd+Shift+R sur Mac), puis réessayez.');
       } else {
         setError(msg);
       }
@@ -401,15 +408,18 @@ export default function Casino() {
           {String(error).includes('is not defined') || String(error).includes('API_BASE')
             ? (
               <>
-                Veuillez actualiser la page pour charger la dernière version (évite l’erreur de chargement des jeux).
+                Ancienne version en cache. Actualisez la page pour charger la dernière version (évite l’erreur de chargement des jeux).
                 <p style={{ marginTop: '0.75rem' }}>
                   <button
                     type="button"
                     className="casino-balance-refresh"
-                    onClick={() => { window.location.href = window.location.pathname + '?v=' + Date.now(); }}
+                    onClick={() => { window.location.href = window.location.pathname + '?_cb=' + Date.now(); }}
                   >
                     Actualiser maintenant
                   </button>
+                </p>
+                <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                  Si le message revient après clic, faites <strong>Ctrl+Shift+R</strong> (rechargement forcé).
                 </p>
               </>
             )

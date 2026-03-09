@@ -2,13 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="app-version" content="casino-2025-03-02" />
+    <meta name="app-version" content="casino-2025-03-09" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MAAXBETE — Paris sportifs & Casino | maaxbete.com</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js" defer></script>
   </head>
   <body>
+    <script>
+      (function() {
+        var q = window.location.search || '';
+        if (q.indexOf('_cb=') === -1 && q.indexOf('v=') === -1) {
+          var sep = window.location.pathname.indexOf('?') !== -1 ? '&' : (q ? '&' : '?');
+          window.location.replace(window.location.pathname + window.location.search + sep + '_cb=' + Date.now());
+        }
+      })();
+    </script>
     <div id="root">
       <p style="margin:0;padding:2rem;color:#e0e0e0;background:#1a1a1e;min-height:100vh;font-family:system-ui,sans-serif;">Chargement…</p>
     </div>
