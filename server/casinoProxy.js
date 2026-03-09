@@ -39,6 +39,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // certains providers envoient form-urlencoded au callback
 
 app.use('/api/app', appRoutes);
 
@@ -212,6 +213,35 @@ app.post('/api/casino/nexus-deposit', async (req, res) => {
   return res.status(502).json({ ok: false, error: 'Deposit non disponible (vérifier Transfer API)' });
 });
 
+/** Liste de clés possibles pour l'identifiant joueur (callback GET/POST). */
+const USER_ID_KEYS = [
+  'user_code', 'user_id', 'user', 'player_id', 'username',
+  'userId', 'token', 'session_id', 'external_id', 'sub', 'uid', 'player',
+];
+
+/** Extrait le login utilisateur depuis query (GET) ou body (POST). Si valeur numérique, tente getUserById. */
+async function resolveUserLoginFromParams(params) {
+  let raw = '';
+  for (const key of USER_ID_KEYS) {
+    const v = params[key];
+    if (v !== undefined && v !== null && String(v).trim() !== '') {
+      raw = String(v).trim();
+      break;
+    }
+  }
+  if (!raw) return null;
+  if (useDbWallet) {
+    const byLogin = await db.getUserByLogin(raw).catch(() => null);
+    if (byLogin) return byLogin.login;
+    const num = parseInt(raw, 10);
+    if (!Number.isNaN(num)) {
+      const byId = await db.getUserById(num).catch(() => null);
+      if (byId) return byId.login;
+    }
+  }
+  return raw;
+}
+
 /** Retourne le solde actuel du joueur (sans modifier). Utilisé par le callback get_balance. */
 async function getCurrentBalance(userLogin) {
   if (useDbWallet) {
@@ -233,16 +263,32 @@ function formatBalanceForProvider(balance, currency = 'TND') {
   return b;
 }
 
+/** Log callback en production pour debug (voir logs Render). */
+function logCallback(method, req, extra = {}) {
+  if (!isProduction) return;
+  const q = req.query && Object.keys(req.query).length ? req.query : undefined;
+  const b = req.body && typeof req.body === 'object' && Object.keys(req.body).length ? req.body : undefined;
+  console.log('[Casino Callback]', method, { query: q, body: b, ...extra });
+}
+
 /** Réponse balance pour GET callback (partagée). */
 async function handleGetCallbackBalance(req, res) {
-  const userLogin = (req.query.user_code || req.query.user_id || req.query.user || req.query.player_id || req.query.username || '').toString().trim();
-  if (!userLogin) return res.status(400).json({ status: 0, error: 'user manquant', balance: 0 });
+  logCallback('GET', req);
+  const userLogin = await resolveUserLoginFromParams(req.query || {});
+  if (!userLogin) {
+    return res.status(400).json({ status: 0, error: 'user manquant', balance: 0 });
+  }
   const balance = await getCurrentBalance(userLogin);
-  if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
+  if (balance === null) {
+    return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
+  }
   const out = formatBalanceForProvider(balance);
   return res.json({ status: 1, balance: out, currency: 'TND', error: 0 });
 }
 
+/** CORS preflight pour callback (certains providers envoient OPTIONS). */
+app.options('/api/casino/callback', (_req, res) => res.sendStatus(204));
+app.options('/api/casino/callback/balance', (_req, res) => res.sendStatus(204));
 /** GET balance : certains providers appellent le callback en GET pour récupérer le solde. */
 app.get('/api/casino/callback', handleGetCallbackBalance);
 /** Certains providers utilisent Site Endpoint + /balance */
@@ -251,12 +297,16 @@ app.get('/api/casino/callback/balance', handleGetCallbackBalance);
 /** Callback appelé par l'API casino pour mises/gains (débit/crédit du solde) et get_balance. */
 app.post('/api/casino/callback', async (req, res) => {
   const body = req.body || {};
-  const userLogin = (body.user_code || body.user_id || body.user || body.player_id || body.username || '').toString().trim();
+  logCallback('POST', req);
+  const userLogin = await resolveUserLoginFromParams(body);
   if (!userLogin) return res.status(400).json({ status: 0, error: 'user manquant' });
-  const type = (body.type || body.action || '').toString().toLowerCase();
+  const type = (body.type || body.action || body.method || '').toString().toLowerCase();
 
-  // get_balance / balance : lecture seule, ne pas modifier le solde
-  if (type === 'get_balance' || type === 'balance' || type === 'balance_check') {
+  // get_balance / balance : lecture seule, ne pas modifier le solde (plusieurs noms possibles)
+  const isBalanceOnly = [
+    'get_balance', 'balance', 'balance_check', 'getbalance', 'check_balance',
+  ].includes(type) || (body.method && String(body.method).toLowerCase() === 'getbalance');
+  if (isBalanceOnly) {
     const balance = await getCurrentBalance(userLogin);
     if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
     return res.json({ status: 1, balance: formatBalanceForProvider(balance), currency: 'TND', error: 0 });
@@ -438,7 +488,7 @@ app.post('/api/casino/launch', async (req, res) => {
     balanceParams.home_url = CALLBACK_URL;
   }
 
-  function addBalanceToUrl(url, bal, cur) {
+  function addBalanceToUrl(url, bal, cur, userCode) {
     if (!url || typeof url !== 'string') return url;
     const sep = url.includes('?') ? '&' : '?';
     const params = [
@@ -448,6 +498,10 @@ app.post('/api/casino/launch', async (req, res) => {
       `amount=${encodeURIComponent(bal)}`,
       `cb_currency=${encodeURIComponent(cur)}`,
     ];
+    if (userCode) {
+      params.push(`user_code=${encodeURIComponent(userCode)}`);
+      params.push(`user_id=${encodeURIComponent(userCode)}`);
+    }
     return url + sep + params.join('&');
   }
 
@@ -495,19 +549,19 @@ app.post('/api/casino/launch', async (req, res) => {
   for (const method of methodsToTry) {
     const url = await tryLaunch({ method, ...baseParams, ...balanceParams });
     if (url) {
-      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend) });
+      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend, userLogin) });
     }
   }
   for (const method of methodsToTry) {
     const url = await tryLaunch({ method, ...baseParams, user_id: userLogin, ...balanceParams });
     if (url) {
-      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend) });
+      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend, userLogin) });
     }
   }
   for (const method of methodsToTry) {
     const url = await tryLaunch({ method, ...baseParams });
     if (url) {
-      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend) });
+      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend, userLogin) });
     }
   }
 

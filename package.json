@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "proxy": "node server/casinoProxy.js",
-    "tunnel": "npx --yes ngrok http 3001"
+    "tunnel": "npx --yes ngrok http 3001",
+    "test:casino": "node server/scripts/casino-wallet-test.mjs"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
