@@ -309,10 +309,14 @@ app.post('/api/casino/launch', async (req, res) => {
   if (!AGENT_CODE || !AGENT_TOKEN) {
     return apiError(res, 500, 'CASINO_TOKEN ou CASINO_SECRET manquants dans .env');
   }
-  const { provider_code, game_code, user_code, lang = 'en', balance, currency } = req.body || {};
+  let { provider_code, game_code, user_code, lang = 'en', balance, currency } = req.body || {};
   if (!provider_code || !game_code) {
     return res.status(400).json({ ok: false, error: 'provider_code et game_code requis' });
   }
+  provider_code = String(provider_code).trim().toUpperCase();
+  if (provider_code === 'PRAGMATIC PLAY') provider_code = 'PRAGMATIC';
+  if (provider_code === "PLAY'N GO") provider_code = 'PLAYNGO';
+  game_code = String(game_code).trim();
   const userLogin = user_code || 'guest';
   let balanceToSend = balance != null ? Number(balance) : 0;
   let currencyToSend = (currency || 'TND').toString().toUpperCase();
@@ -331,7 +335,7 @@ app.post('/api/casino/launch', async (req, res) => {
       currencyToSend = (wallet.currency || 'TND').toString().toUpperCase();
     }
   }
-  const methodsToTry = ['game_launch', 'launch', 'launch_game', 'open_game', 'start_game', 'get_launch_url', 'play', 'init_game'];
+  const methodsToTry = ['game_launch', 'launch', 'launch_game', 'open_game', 'start_game', 'get_launch_url', 'get_game_url', 'play', 'init_game', 'game_launch_url', 'launchGame'];
   const baseParams = { provider_code, game_code, user_code: userLogin, lang };
   const balanceParams = {
     balance: balanceToSend,
@@ -366,53 +370,74 @@ app.post('/api/casino/launch', async (req, res) => {
     return url + sep + params.join('&');
   }
 
-  for (const method of methodsToTry) {
-    try {
-      const body = { method, ...baseParams, ...balanceParams };
-      const { res: r, data } = await callApi(body);
-      if (!r.ok) continue;
-      let url = data.launch_url || data.game_url || data.url || (data.data && (data.data.launch_url || data.data.game_url || data.data.url));
-      if (data.status === 1 && url) {
-        url = addBalanceToUrl(url, balanceToSend, currencyToSend);
-        return res.json({ ok: true, launch_url: url });
+  function extractLaunchUrl(data) {
+    if (!data || typeof data !== 'object') return null;
+    const u = data.launch_url || data.game_url || data.url || data.play_url || data.gameUrl || data.launchUrl;
+    if (typeof u === 'string' && /^https?:\/\//i.test(u)) return u;
+    const inner = data.data || data.result || data.response;
+    if (inner && typeof inner === 'object') {
+      const v = inner.launch_url || inner.game_url || inner.url || inner.play_url;
+      if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v;
+    }
+    return null;
+  }
+
+  function isSuccess(data) {
+    if (!data) return false;
+    if (data.status === 1 || data.status === '1') return true;
+    if (data.status === 0 && extractLaunchUrl(data)) return true;
+    if (data.success === true && extractLaunchUrl(data)) return true;
+    if (data.ok === true && extractLaunchUrl(data)) return true;
+    return false;
+  }
+
+  let lastApiError = null;
+
+  function tryLaunch(body) {
+    return callApi(body).then(({ res: r, data }) => {
+      if (!r.ok) {
+        lastApiError = data.msg || data.error || data.message || `HTTP ${r.status}`;
+        return null;
       }
-      if (data.msg && (data.msg.toLowerCase().includes('invalid method') || data.msg.toLowerCase().includes('invalid parameter'))) continue;
-      if (data.error && (data.error.toLowerCase().includes('invalid method') || data.error.toLowerCase().includes('invalid parameter'))) continue;
-    } catch (_) {
-      continue;
+      const url = extractLaunchUrl(data);
+      if (url && isSuccess(data)) return url;
+      if (!data.msg?.toLowerCase().includes('invalid method') && !data.error?.toLowerCase().includes('invalid parameter')) {
+        lastApiError = data.msg || data.error || data.message || null;
+      }
+      return null;
+    }).catch((err) => {
+      lastApiError = err.message || null;
+      return null;
+    });
+  }
+
+  for (const method of methodsToTry) {
+    const url = await tryLaunch({ method, ...baseParams, ...balanceParams });
+    if (url) {
+      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend) });
     }
   }
   for (const method of methodsToTry) {
-    try {
-      const body = { method, ...baseParams, user_id: userLogin, ...balanceParams };
-      const { res: r, data } = await callApi(body);
-      if (!r.ok) continue;
-      let url = data.launch_url || data.game_url || data.url || (data.data && (data.data.launch_url || data.data.game_url || data.data.url));
-      if (data.status === 1 && url) {
-        url = addBalanceToUrl(url, balanceToSend, currencyToSend);
-        return res.json({ ok: true, launch_url: url });
-      }
-    } catch (_) {
-      continue;
+    const url = await tryLaunch({ method, ...baseParams, user_id: userLogin, ...balanceParams });
+    if (url) {
+      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend) });
     }
   }
   for (const method of methodsToTry) {
-    try {
-      const body = { method, ...baseParams };
-      const { res: r, data } = await callApi(body);
-      if (!r.ok) continue;
-      let url = data.launch_url || data.game_url || data.url || (data.data && (data.data.launch_url || data.data.game_url || data.data.url));
-      if (data.status === 1 && url) {
-        url = addBalanceToUrl(url, balanceToSend, currencyToSend);
-        return res.json({ ok: true, launch_url: url });
-      }
-      if (data.msg && (data.msg.toLowerCase().includes('invalid method') || data.msg.toLowerCase().includes('invalid parameter'))) continue;
-      if (data.error && (data.error.toLowerCase().includes('invalid method') || data.error.toLowerCase().includes('invalid parameter'))) continue;
-    } catch (_) {
-      continue;
+    const url = await tryLaunch({ method, ...baseParams });
+    if (url) {
+      return res.json({ ok: true, launch_url: addBalanceToUrl(url, balanceToSend, currencyToSend) });
     }
   }
-  return res.status(502).json({ ok: false, error: 'Aucune méthode de lancement acceptée par l\'API (essayé: ' + methodsToTry.join(', ') + '). Vérifiez la doc API.' });
+
+  const errMsg = lastApiError
+    ? `API Casino : ${lastApiError}`
+    : 'Aucune méthode de lancement acceptée par l\'API. Vérifiez la doc API (méthode de lancement) et la whitelist IP.';
+  return res.status(502).json({
+    ok: false,
+    error: errMsg,
+    hint: lastApiError ? undefined : 'Vérifiez que l\'IP du backend (voir /api/casino/my-ip) est dans la whitelist du panneau API.',
+  });
 });
 
 async function start() {
