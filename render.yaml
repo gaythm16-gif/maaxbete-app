@@ -19,3 +19,6 @@ services:
         value: https://maaxbete-backend.onrender.com/api/casino/callback
       - key: CASINO_API_URL
         value: https://api.nexusggr.com
+      # Pragmatic Play attend le solde en entier (centimes) — obligatoire pour CREDIT > 0 dans le jeu
+      - key: CASINO_BALANCE_IN_CENTS
+        value: "true"

@@ -109,7 +109,7 @@ Tous les tests doivent afficher ✓. En cas d’échec, corriger l’endpoint ou
 
 | Problème | Action |
 |----------|--------|
-| CREDIT = 0 dans le jeu | Vérifier A + B + C (callback URL définie partout et GET callback qui retourne le bon solde). |
+| CREDIT = 0 dans le jeu | **1)** Ajouter sur Render : `CASINO_BALANCE_IN_CENTS` = `true` (Pragmatic attend le solde en centimes). **2)** Vérifier A + B + C (callback URL, GET callback qui retourne le solde). |
 | Callback « user introuvable » | Vérifier que le login envoyé par le provider (user_code / user_id) correspond au login en base. |
 | Solde toujours 0 après config | Essayer `CASINO_BALANCE_IN_CENTS=true` sur Render (certaines APIs veulent un entier en centimes). |
 | Jeu en Rp au lieu de TND | Souvent réglage côté provider (devise par défaut). Le backend envoie déjà `currency: 'TND'` dans le callback. |

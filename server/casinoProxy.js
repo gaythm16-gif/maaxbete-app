@@ -263,6 +263,26 @@ function formatBalanceForProvider(balance, currency = 'TND') {
   return b;
 }
 
+/** Réponse JSON standard pour callback (Pragmatic attend balance en centimes entier + errorCode). */
+function callbackSuccess(res, balance, currency = 'TND') {
+  const out = typeof balance === 'number' ? formatBalanceForProvider(balance) : formatBalanceForProvider(Number(balance) || 0);
+  return res.json({
+    status: 1,
+    balance: out,
+    currency,
+    error: 0,
+    errorCode: 0,
+  });
+}
+function callbackError(res, code, message, balance = 0) {
+  return res.status(code).json({
+    status: 0,
+    error: message,
+    balance: typeof balance === 'number' ? balance : 0,
+    errorCode: 1,
+  });
+}
+
 /** Log callback en production pour debug (voir logs Render). */
 function logCallback(method, req, extra = {}) {
   if (!isProduction) return;
@@ -271,19 +291,14 @@ function logCallback(method, req, extra = {}) {
   console.log('[Casino Callback]', method, { query: q, body: b, ...extra });
 }
 
-/** Réponse balance pour GET callback (partagée). */
+/** Réponse balance pour GET callback (partagée). Pragmatic attend balance en centimes (entier) + errorCode. */
 async function handleGetCallbackBalance(req, res) {
   logCallback('GET', req);
   const userLogin = await resolveUserLoginFromParams(req.query || {});
-  if (!userLogin) {
-    return res.status(400).json({ status: 0, error: 'user manquant', balance: 0 });
-  }
+  if (!userLogin) return callbackError(res, 400, 'user manquant', 0);
   const balance = await getCurrentBalance(userLogin);
-  if (balance === null) {
-    return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
-  }
-  const out = formatBalanceForProvider(balance);
-  return res.json({ status: 1, balance: out, currency: 'TND', error: 0 });
+  if (balance === null) return callbackError(res, 400, 'user introuvable', 0);
+  return callbackSuccess(res, balance, 'TND');
 }
 
 /** CORS preflight pour callback (certains providers envoient OPTIONS). */
@@ -299,7 +314,7 @@ app.post('/api/casino/callback', async (req, res) => {
   const body = req.body || {};
   logCallback('POST', req);
   const userLogin = await resolveUserLoginFromParams(body);
-  if (!userLogin) return res.status(400).json({ status: 0, error: 'user manquant' });
+  if (!userLogin) return callbackError(res, 400, 'user manquant', 0);
   const type = (body.type || body.action || body.method || '').toString().toLowerCase();
 
   // get_balance / balance : lecture seule, ne pas modifier le solde (plusieurs noms possibles)
@@ -308,8 +323,8 @@ app.post('/api/casino/callback', async (req, res) => {
   ].includes(type) || (body.method && String(body.method).toLowerCase() === 'getbalance');
   if (isBalanceOnly) {
     const balance = await getCurrentBalance(userLogin);
-    if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
-    return res.json({ status: 1, balance: formatBalanceForProvider(balance), currency: 'TND', error: 0 });
+    if (balance === null) return callbackError(res, 400, 'user introuvable', 0);
+    return callbackSuccess(res, balance, 'TND');
   }
 
   const amount = Number(body.amount ?? body.bet ?? body.win ?? body.delta ?? 0);
@@ -322,7 +337,7 @@ app.post('/api/casino/callback', async (req, res) => {
   if (useDbWallet) {
     try {
       const u = await db.getUserByLogin(userLogin);
-      if (!u) return res.status(400).json({ status: 0, error: 'user introuvable' });
+      if (!u) return callbackError(res, 400, 'user introuvable', 0);
       const current = Math.round(Number(u.balance) * 100) / 100;
       const newBalance = Math.max(0, Math.round((current + delta) * 100) / 100);
       await db.updateUser(u.id, { balance: newBalance });
@@ -339,14 +354,14 @@ app.post('/api/casino/callback', async (req, res) => {
           });
         } catch (_) {}
       }
-      return res.json({ status: 1, balance: formatBalanceForProvider(newBalance), currency: (u && u.currency) || 'TND' });
+      return callbackSuccess(res, newBalance, (u && u.currency) || 'TND');
     } catch (e) {
-      return res.status(500).json({ status: 0, error: e.message });
+      return res.status(500).json({ status: 0, error: e.message, errorCode: 1 });
     }
   }
   const newBalance = updateBalance(userLogin, delta);
   const w = getWallet(userLogin);
-  return res.json({ status: 1, balance: formatBalanceForProvider(newBalance), currency: (w && w.currency) || 'TND' });
+  return callbackSuccess(res, newBalance, (w && w.currency) || 'TND');
 });
 
 app.get('/api/casino/providers', async (_req, res) => {
