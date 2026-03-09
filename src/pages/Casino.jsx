@@ -212,7 +212,12 @@ export default function Casino() {
       }
     } catch (e) {
       setGameLaunchUrl(null);
-      setError(e.message || 'Erreur lors du lancement du jeu.');
+      const msg = e.message || 'Erreur lors du lancement du jeu.';
+      if (msg.includes('API_BASE') && msg.includes('not defined')) {
+        setError('Veuillez actualiser la page (Ctrl+F5) pour charger la dernière version.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLaunching(false);
     }

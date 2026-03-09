@@ -175,7 +175,12 @@ export default function LiveCasino() {
       }
     } catch (e) {
       setGameLaunchUrl(null);
-      setError(e.message || 'Erreur lors du lancement.');
+      const msg = e.message || 'Erreur lors du lancement.';
+      if (msg.includes('API_BASE') && msg.includes('not defined')) {
+        setError('Veuillez actualiser la page (Ctrl+F5) pour charger la dernière version.');
+      } else {
+        setError(msg);
+      }
     }
   };
 
