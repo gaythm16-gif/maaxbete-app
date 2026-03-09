@@ -1,19 +1,25 @@
 /**
- * Client API Casino : appelle /api/casino (proxy en dev, backend Render en prod).
- * URL : getCasinoApiBase() uniquement — appel à l’exécution pour éviter tout nom de variable non défini.
+ * Client API Casino : appelle le backend /api/casino.
+ * URL : constante construite ici (aucune autre variable d’URL).
  */
-import { getCasinoApiBase } from '../config/api.js';
 import { DEMO_CASINO_GAMES } from '../data/casinoGames';
 import { getDemoGameImage } from '../utils/demoGameImage';
 
-function getBase() {
-  return getCasinoApiBase();
+function getCasinoUrl() {
+  if (typeof window !== 'undefined' && window.location?.hostname === 'maaxbete-app.vercel.app')
+    return 'https://maaxbete-backend.onrender.com/api/casino';
+  const v = import.meta.env.VITE_API_URL;
+  if (v && typeof v === 'string' && v.trim())
+    return v.trim().replace(/\/$/, '') + '/api/casino';
+  return '/api/casino';
 }
+
+const CASINO_URL = getCasinoUrl();
 
 /** IP publiques du serveur (proxy) — à ajouter dans la whitelist. Retourne { ip, ipv6 }. */
 export async function getMyIp() {
   try {
-    const res = await fetch(`${getBase()}/my-ip`);
+    const res = await fetch(`${CASINO_URL}/my-ip`);
     const raw = await res.json().catch(() => ({}));
     if (!raw.ok) return { ip: null, ipv6: null };
     return { ip: raw.ip || null, ipv6: raw.ipv6 || null };
@@ -24,7 +30,7 @@ export async function getMyIp() {
 
 export async function getProviders() {
   try {
-    const res = await fetch(`${getBase()}/providers`);
+    const res = await fetch(`${CASINO_URL}/providers`);
     const raw = await res.json().catch(() => ({}));
     if (res.ok && raw.ok && Array.isArray(raw.providers) && raw.providers.length > 0) {
       return { ok: true, providers: raw.providers };
@@ -45,7 +51,7 @@ export async function getProviders() {
 export async function getGameList(providerCode) {
   const q = providerCode ? `?provider=${encodeURIComponent(providerCode)}` : '';
   try {
-    const res = await fetch(`${getBase()}/games${q}`);
+    const res = await fetch(`${CASINO_URL}/games${q}`);
     const raw = await res.json().catch(() => ({}));
     if (res.ok && raw.ok && Array.isArray(raw.games) && raw.games.length > 0) {
       return { ok: true, games: raw.games, isDemo: !!raw.isDemo };
@@ -92,7 +98,7 @@ export async function getGameList(providerCode) {
 
 export async function launchGame({ providerCode, gameCode, userCode, lang = 'en', balance, currency }) {
   try {
-    const res = await fetch(`${getBase()}/launch`, {
+    const res = await fetch(`${CASINO_URL}/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -124,7 +130,7 @@ export async function launchGame({ providerCode, gameCode, userCode, lang = 'en'
 export async function getCasinoBalance(userLogin) {
   if (!userLogin) return { ok: false, balance: null };
   try {
-    const res = await fetch(`${getBase()}/balance?user=${encodeURIComponent(userLogin)}`);
+    const res = await fetch(`${CASINO_URL}/balance?user=${encodeURIComponent(userLogin)}`);
     const raw = await res.json().catch(() => ({}));
     if (raw.ok) return { ok: true, balance: raw.balance, currency: raw.currency };
     return { ok: false, balance: null };
@@ -137,7 +143,7 @@ export async function getCasinoBalance(userLogin) {
 export async function syncCasinoBalance(userLogin, balance, currency = 'TND') {
   if (!userLogin) return { ok: false };
   try {
-    const res = await fetch(`${getBase()}/balance`, {
+    const res = await fetch(`${CASINO_URL}/balance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user: userLogin, balance: Number(balance) || 0, currency }),
@@ -153,7 +159,7 @@ export async function syncCasinoBalance(userLogin, balance, currency = 'TND') {
 export async function depositToNexus(userLogin, amount, currency = 'TND') {
   if (!userLogin || !amount) return { ok: false };
   try {
-    const res = await fetch(`${getBase()}/nexus-deposit`, {
+    const res = await fetch(`${CASINO_URL}/nexus-deposit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user: userLogin, amount: Number(amount) || 0, currency }),
