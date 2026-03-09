@@ -5,6 +5,16 @@ import { getProviders, getGameList, launchGame, getMyIp, getCasinoBalance, syncC
 import { getDemoGameImage } from '../utils/demoGameImage';
 import './Casino.css';
 
+/** Ne jamais afficher "API_BASE is not defined" : remplacer par un message invitant à recharger. */
+function normalizeError(msg) {
+  if (msg == null) return msg;
+  const s = String(msg);
+  if (s.includes('API_BASE') || s.includes('is not defined')) {
+    return 'RELOAD_PAGE';
+  }
+  return msg;
+}
+
 function GameCard({ g, user, t, tagLabel }) {
   const fallback = getDemoGameImage(g.id, g.name);
   const [imgSrc, setImgSrc] = useState(g.image || fallback);
@@ -88,17 +98,17 @@ export default function Casino() {
           setProviders([{ code: 'PRAGMATIC', name: 'Pragmatic Play', status: 1 }, { code: "PLAY'N GO", name: "Play'n GO", status: 1 }]);
           setCurrentProvider('PRAGMATIC');
           if (result.ipWhitelistHint && result.hint) {
-            setError(result.hint);
+            setError(normalizeError(result.hint));
             getMyIp().then((ips) => setWhitelistIp(ips));
           } else if (result.error && result.error !== 'Réseau') {
-            setError(result.error);
+            setError(normalizeError(result.error));
             setWhitelistIp(null);
           }
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message || 'Erreur provider_list');
+          setError(normalizeError(err.message) || 'Erreur provider_list');
         }
       })
       .finally(() => {
@@ -123,17 +133,17 @@ export default function Casino() {
           setGames(result.games);
           setIsDemoList(!!result.isDemo);
           if (result.isDemo && result.ipWhitelistHint && result.hint) {
-            setError(result.hint);
+            setError(normalizeError(result.hint));
             getMyIp().then((ips) => setWhitelistIp(ips));
           }
         } else {
-          setError(result.error || t('casinoLoadError') || 'Impossible de charger les jeux.');
+          setError(normalizeError(result.error) || t('casinoLoadError') || 'Impossible de charger les jeux.');
           setGames([]);
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message || 'Erreur réseau');
+          setError(normalizeError(err.message) || 'Erreur réseau');
           setGames([]);
         }
       })
@@ -214,17 +224,12 @@ export default function Casino() {
         setGameLaunchUrl(result.url);
       } else {
         setGameLaunchUrl(null);
-        setError(result.error || 'Impossible de lancer le jeu.');
-        if (result.ipWhitelistHint && result.hint) setError(result.hint);
+        setError(normalizeError(result.error) || 'Impossible de lancer le jeu.');
+        if (result.ipWhitelistHint && result.hint) setError(normalizeError(result.hint));
       }
     } catch (e) {
       setGameLaunchUrl(null);
-      const msg = e?.message || 'Erreur lors du lancement du jeu.';
-      if (msg.includes('is not defined') || msg.includes('API_BASE')) {
-        setError('Ancienne version chargée. Actualisez la page avec Ctrl+Shift+R (ou Cmd+Shift+R sur Mac), puis réessayez.');
-      } else {
-        setError(msg);
-      }
+      setError(normalizeError(e?.message) || 'Erreur lors du lancement du jeu.');
     } finally {
       setLaunching(false);
     }
@@ -405,7 +410,7 @@ export default function Casino() {
 
       {error && !loading && (
         <div className="casino-error">
-          {String(error).includes('is not defined') || String(error).includes('API_BASE')
+          {(error === 'RELOAD_PAGE' || String(error).includes('is not defined') || String(error).includes('API_BASE'))
             ? (
               <>
                 Ancienne version en cache. Actualisez la page pour charger la dernière version (évite l’erreur de chargement des jeux).
