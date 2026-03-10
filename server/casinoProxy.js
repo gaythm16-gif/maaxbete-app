@@ -27,6 +27,8 @@ const SITE_ENDPOINT = FRONTEND_URL || (process.env.NODE_ENV === 'production' ? '
 const GAME_LIST_PATH = process.env.CASINO_GAME_LIST_PATH || '/game/list';
 const CALLBACK_URL = (process.env.CASINO_CALLBACK_URL || '').replace(/\/$/, '');
 const BALANCE_IN_CENTS = process.env.CASINO_BALANCE_IN_CENTS === 'true' || process.env.CASINO_BALANCE_IN_CENTS === '1';
+// Si le jeu affiche Rp et BET en milliers, le provider peut attendre un entier « grand » (ex. 100 TND → 100000). Multiplicateur appliqué au solde renvoyé au callback uniquement.
+const CALLBACK_BALANCE_MULTIPLIER = Math.max(1, Number(process.env.CASINO_CALLBACK_BALANCE_MULTIPLIER) || 1);
 const isProduction = process.env.NODE_ENV === 'production';
 
 // CORS : en production n'accepter que le frontend (Vercel) ; en dev autoriser l'origine ou *
@@ -216,14 +218,25 @@ app.post('/api/casino/nexus-deposit', async (req, res) => {
 /** Liste de clés possibles pour l'identifiant joueur (callback GET/POST). */
 const USER_ID_KEYS = [
   'user_code', 'user_id', 'user', 'player_id', 'username',
-  'userId', 'token', 'session_id', 'external_id', 'sub', 'uid', 'player',
+  'userId', 'member_id', 'memberId', 'token', 'session_id', 'external_id', 'sub', 'uid', 'player',
+  'userid', 'secureLogin', 'secure_login', 'login',
 ];
+
+/** Aplatit un niveau : body.data / body.params / body.player → fusion pour recherche user. */
+function flattenParamsForUser(params) {
+  if (!params || typeof params !== 'object') return {};
+  const flat = { ...params };
+  const nested = params.data || params.params || params.player || params.payload;
+  if (nested && typeof nested === 'object') Object.assign(flat, nested);
+  return flat;
+}
 
 /** Extrait le login utilisateur depuis query (GET) ou body (POST). Si valeur numérique, tente getUserById. */
 async function resolveUserLoginFromParams(params) {
+  const flat = flattenParamsForUser(params);
   let raw = '';
   for (const key of USER_ID_KEYS) {
-    const v = params[key];
+    const v = flat[key] ?? params[key];
     if (v !== undefined && v !== null && String(v).trim() !== '') {
       raw = String(v).trim();
       break;
@@ -258,29 +271,24 @@ async function getCurrentBalance(userLogin) {
 }
 
 function formatBalanceForProvider(balance, currency = 'TND') {
-  const b = Math.round(Number(balance) * 100) / 100;
-  if (BALANCE_IN_CENTS) return Math.round(b * 100);
+  let b = Math.round(Number(balance) * 100) / 100;
+  if (BALANCE_IN_CENTS) b = Math.round(b * 100);
+  if (CALLBACK_BALANCE_MULTIPLIER > 1) b = Math.round(Number(b) * CALLBACK_BALANCE_MULTIPLIER);
   return b;
 }
 
-/** Réponse JSON standard pour callback (Pragmatic attend balance en centimes entier + errorCode). */
-function callbackSuccess(res, balance, currency = 'TND') {
-  const out = typeof balance === 'number' ? formatBalanceForProvider(balance) : formatBalanceForProvider(Number(balance) || 0);
-  return res.json({
+/** Réponse callback « compatible » Pragmatic / agrégateurs : plusieurs champs souvent attendus. */
+function seamlessResponse(balanceOut, currency = 'TND') {
+  const b = Number(balanceOut);
+  return {
     status: 1,
-    balance: out,
+    balance: b,
+    cash: b,
     currency,
     error: 0,
     errorCode: 0,
-  });
-}
-function callbackError(res, code, message, balance = 0) {
-  return res.status(code).json({
-    status: 0,
-    error: message,
-    balance: typeof balance === 'number' ? balance : 0,
-    errorCode: 1,
-  });
+    msg: 'OK',
+  };
 }
 
 /** Log callback en production pour debug (voir logs Render). */
@@ -291,14 +299,19 @@ function logCallback(method, req, extra = {}) {
   console.log('[Casino Callback]', method, { query: q, body: b, ...extra });
 }
 
-/** Réponse balance pour GET callback (partagée). Pragmatic attend balance en centimes (entier) + errorCode. */
+/** Réponse balance pour GET callback (partagée). */
 async function handleGetCallbackBalance(req, res) {
   logCallback('GET', req);
   const userLogin = await resolveUserLoginFromParams(req.query || {});
-  if (!userLogin) return callbackError(res, 400, 'user manquant', 0);
+  if (!userLogin) {
+    return res.status(400).json({ status: 0, error: 'user manquant', balance: 0, errorCode: 1 });
+  }
   const balance = await getCurrentBalance(userLogin);
-  if (balance === null) return callbackError(res, 400, 'user introuvable', 0);
-  return callbackSuccess(res, balance, 'TND');
+  if (balance === null) {
+    return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0 });
+  }
+  const out = formatBalanceForProvider(balance);
+  return res.json(seamlessResponse(out, 'TND'));
 }
 
 /** CORS preflight pour callback (certains providers envoient OPTIONS). */
@@ -314,7 +327,10 @@ app.post('/api/casino/callback', async (req, res) => {
   const body = req.body || {};
   logCallback('POST', req);
   const userLogin = await resolveUserLoginFromParams(body);
-  if (!userLogin) return callbackError(res, 400, 'user manquant', 0);
+  if (!userLogin) {
+    if (isProduction) console.warn('[Casino Callback] POST user manquant — body keys:', Object.keys(body), 'raw:', JSON.stringify(body).slice(0, 500));
+    return res.status(400).json({ status: 0, error: 'user manquant', errorCode: 1, balance: 0 });
+  }
   const type = (body.type || body.action || body.method || '').toString().toLowerCase();
 
   // get_balance / balance : lecture seule, ne pas modifier le solde (plusieurs noms possibles)
@@ -323,8 +339,8 @@ app.post('/api/casino/callback', async (req, res) => {
   ].includes(type) || (body.method && String(body.method).toLowerCase() === 'getbalance');
   if (isBalanceOnly) {
     const balance = await getCurrentBalance(userLogin);
-    if (balance === null) return callbackError(res, 400, 'user introuvable', 0);
-    return callbackSuccess(res, balance, 'TND');
+    if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0, errorCode: 1 });
+    return res.json(seamlessResponse(formatBalanceForProvider(balance), 'TND'));
   }
 
   const amount = Number(body.amount ?? body.bet ?? body.win ?? body.delta ?? 0);
@@ -334,10 +350,17 @@ app.post('/api/casino/callback', async (req, res) => {
   else if (type === 'refund' || type === 'rollback') delta = Math.abs(amount);
   else delta = Number(body.delta) || 0;
 
+  // Type inconnu + pas de montant : traiter comme lecture solde uniquement (évite CREDIT 0 si le provider n'envoie pas type=get_balance)
+  if (delta === 0 && amount === 0 && !type) {
+    const balance = await getCurrentBalance(userLogin);
+    if (balance === null) return res.status(400).json({ status: 0, error: 'user introuvable', balance: 0, errorCode: 1 });
+    return res.json(seamlessResponse(formatBalanceForProvider(balance), 'TND'));
+  }
+
   if (useDbWallet) {
     try {
       const u = await db.getUserByLogin(userLogin);
-      if (!u) return callbackError(res, 400, 'user introuvable', 0);
+      if (!u) return res.status(400).json({ status: 0, error: 'user introuvable' });
       const current = Math.round(Number(u.balance) * 100) / 100;
       const newBalance = Math.max(0, Math.round((current + delta) * 100) / 100);
       await db.updateUser(u.id, { balance: newBalance });
@@ -354,14 +377,14 @@ app.post('/api/casino/callback', async (req, res) => {
           });
         } catch (_) {}
       }
-      return callbackSuccess(res, newBalance, (u && u.currency) || 'TND');
+      return res.json(seamlessResponse(formatBalanceForProvider(newBalance), (u && u.currency) || 'TND'));
     } catch (e) {
-      return res.status(500).json({ status: 0, error: e.message, errorCode: 1 });
+      return res.status(500).json({ status: 0, error: e.message });
     }
   }
   const newBalance = updateBalance(userLogin, delta);
   const w = getWallet(userLogin);
-  return callbackSuccess(res, newBalance, (w && w.currency) || 'TND');
+  return res.json(seamlessResponse(formatBalanceForProvider(newBalance), (w && w.currency) || 'TND'));
 });
 
 app.get('/api/casino/providers', async (_req, res) => {

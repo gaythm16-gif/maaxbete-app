@@ -17,8 +17,10 @@ services:
         value: https://maaxbete-app.vercel.app
       - key: CASINO_CALLBACK_URL
         value: https://maaxbete-backend.onrender.com/api/casino/callback
+      # Si le jeu affiche CREDIT Rp0 : essayer true (solde en centimes) puis multiplier si BET reste trop haut
+      # - key: CASINO_BALANCE_IN_CENTS
+      #   value: "true"
+      # - key: CASINO_CALLBACK_BALANCE_MULTIPLIER
+      #   value: "1000"
       - key: CASINO_API_URL
         value: https://api.nexusggr.com
-      # Pragmatic Play attend le solde en entier (centimes) — obligatoire pour CREDIT > 0 dans le jeu
-      - key: CASINO_BALANCE_IN_CENTS
-        value: "true"
