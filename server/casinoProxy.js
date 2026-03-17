@@ -278,16 +278,16 @@ function formatBalanceForProvider(balance, currency = 'TND') {
 }
 
 /** Réponse callback « compatible » Pragmatic / agrégateurs : plusieurs champs souvent attendus. */
-function seamlessResponse(balanceOut, currency = 'TND') {
+function seamlessResponse(balanceOut, currency = 'TND', overrides = {}) {
   const b = Number(balanceOut);
   return {
-    status: 1,
+    status: overrides.status ?? 1,
     balance: b,
     cash: b,
     currency,
-    error: 0,
-    errorCode: 0,
-    msg: 'OK',
+    error: overrides.error ?? 0,
+    errorCode: overrides.errorCode ?? 0,
+    msg: overrides.msg ?? 'OK',
   };
 }
 
@@ -343,10 +343,16 @@ app.post('/api/casino/callback', async (req, res) => {
     return res.json(seamlessResponse(formatBalanceForProvider(balance), 'TND'));
   }
 
-  const amount = Number(body.amount ?? body.bet ?? body.win ?? body.delta ?? 0);
+  let amount = Number(body.amount ?? body.bet ?? body.win ?? body.delta ?? body.stake ?? body.credit_amount ?? 0);
+  // Si le provider envoie les montants en centimes (comme le solde renvoyé avec CASINO_BALANCE_IN_CENTS)
+  if (process.env.CASINO_CALLBACK_AMOUNT_IN_CENTS === 'true' || process.env.CASINO_CALLBACK_AMOUNT_IN_CENTS === '1') {
+    amount = amount / 100;
+  }
   let delta = 0;
-  if (type === 'bet' || type === 'debit') delta = -Math.abs(amount);
-  else if (type === 'win' || type === 'credit') delta = Math.abs(amount);
+  const betTypes = ['bet', 'debit', 'place_bet', 'withdraw', 'stake', 'debit_bet', 'withdrawal', 'placebet'];
+  const winTypes = ['win', 'credit', 'deposit', 'win_amount', 'credit_win', 'payout', 'deposit_win'];
+  if (betTypes.includes(type)) delta = -Math.abs(amount);
+  else if (winTypes.includes(type)) delta = Math.abs(amount);
   else if (type === 'refund' || type === 'rollback') delta = Math.abs(amount);
   else delta = Number(body.delta) || 0;
 
@@ -362,8 +368,12 @@ app.post('/api/casino/callback', async (req, res) => {
       const u = await db.getUserByLogin(userLogin);
       if (!u) return res.status(400).json({ status: 0, error: 'user introuvable' });
       const current = Math.round(Number(u.balance) * 100) / 100;
-      const newBalance = Math.max(0, Math.round((current + delta) * 100) / 100);
-      await db.updateUser(u.id, { balance: newBalance });
+      const newBalance = Math.round((current + delta) * 100) / 100;
+      if (newBalance < 0) {
+        return res.status(200).json(seamlessResponse(formatBalanceForProvider(current), (u.currency) || 'TND', { status: 0, error: 1, errorCode: 2, msg: 'Insufficient funds' }));
+      }
+      const safeBalance = Math.max(0, newBalance);
+      await db.updateUser(u.id, { balance: safeBalance });
       if (delta !== 0) {
         const txType = delta > 0 ? 'WIN' : 'BET';
         try {
@@ -372,19 +382,25 @@ app.post('/api/casino/callback', async (req, res) => {
             type: txType,
             fromId: u.id,
             toId: u.id,
-            amount: delta,
+            amount: Math.abs(delta),
             note: `Casino callback ${type} ${Math.abs(amount)}`,
           });
         } catch (_) {}
       }
-      return res.json(seamlessResponse(formatBalanceForProvider(newBalance), (u && u.currency) || 'TND'));
+      return res.json(seamlessResponse(formatBalanceForProvider(safeBalance), (u && u.currency) || 'TND'));
     } catch (e) {
       return res.status(500).json({ status: 0, error: e.message });
     }
   }
-  const newBalance = updateBalance(userLogin, delta);
   const w = getWallet(userLogin);
-  return res.json(seamlessResponse(formatBalanceForProvider(newBalance), (w && w.currency) || 'TND'));
+  const current = w ? Math.round(Number(w.balance) * 100) / 100 : 0;
+  const newBalance = Math.round((current + delta) * 100) / 100;
+  if (newBalance < 0) {
+    return res.status(200).json(seamlessResponse(formatBalanceForProvider(current), (w && w.currency) || 'TND', { status: 0, error: 1, errorCode: 2, msg: 'Insufficient funds' }));
+  }
+  updateBalance(userLogin, delta);
+  const w2 = getWallet(userLogin);
+  return res.json(seamlessResponse(formatBalanceForProvider(w2 ? w2.balance : current + delta), (w2 && w2.currency) || 'TND'));
 });
 
 app.get('/api/casino/providers', async (_req, res) => {

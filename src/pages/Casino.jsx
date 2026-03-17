@@ -78,6 +78,17 @@ export default function Casino() {
     return () => { cancelled = true; };
   }, [user?.login]);
 
+  // Pendant qu'un jeu est ouvert : rafraîchir le solde régulièrement pour que le header affiche les mises/gains en temps réel (liaison site ↔ API)
+  useEffect(() => {
+    if (!gameLaunchUrl || !user?.login) return;
+    const interval = setInterval(() => {
+      getCasinoBalance(user.login).then((r) => {
+        if (r.ok && r.balance != null) syncCasinoBalance(r.balance);
+      });
+    }, 12000); // toutes les 12 s
+    return () => clearInterval(interval);
+  }, [gameLaunchUrl, user?.login]);
+
   // Charger la liste des providers depuis l'API (ou démo)
   useEffect(() => {
     let cancelled = false;
@@ -243,7 +254,14 @@ export default function Casino() {
             <button
               type="button"
               className="casino-game-close"
-              onClick={() => setGameLaunchUrl(null)}
+              onClick={() => {
+                setGameLaunchUrl(null);
+                if (user?.login) {
+                  getCasinoBalance(user.login).then((r) => {
+                    if (r.ok && r.balance != null) syncCasinoBalance(r.balance);
+                  }).catch(() => {});
+                }
+              }}
               aria-label="Fermer le jeu"
             >
               Fermer le jeu

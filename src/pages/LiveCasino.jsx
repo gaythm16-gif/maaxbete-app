@@ -73,6 +73,17 @@ export default function LiveCasino() {
     return () => { cancelled = true; };
   }, [user?.login]);
 
+  // Pendant qu'un jeu est ouvert : rafraîchir le solde régulièrement (liaison site ↔ API)
+  useEffect(() => {
+    if (!gameLaunchUrl || !user?.login) return;
+    const interval = setInterval(() => {
+      getCasinoBalance(user.login).then((r) => {
+        if (r.ok && r.balance != null) syncCasinoBalance(r.balance);
+      });
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [gameLaunchUrl, user?.login]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -206,7 +217,14 @@ export default function LiveCasino() {
             <button
               type="button"
               className="casino-game-close"
-              onClick={() => setGameLaunchUrl(null)}
+              onClick={() => {
+                setGameLaunchUrl(null);
+                if (user?.login) {
+                  getCasinoBalance(user.login).then((r) => {
+                    if (r.ok && r.balance != null) syncCasinoBalance(r.balance);
+                  }).catch(() => {});
+                }
+              }}
               aria-label="Fermer le jeu"
             >
               Fermer le jeu
